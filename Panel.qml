@@ -59,12 +59,13 @@ Ui.Panel {
                         font.pixelSize: Style.font.subtitle
                         font.bold: true
                     }
-                    ToolButton {
+                    Ui.PanelActionButton {
                         id: settingsButton
-                        text: "⚙"
+                        iconText: "⚙"
+                        foreground: root.barForeground
+                        focusable: true
                         Accessible.name: "Canvas settings"
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Settings"
+                        tooltipText: "Settings"
                         onClicked: root.openSettings()
                     }
                 }
@@ -85,12 +86,14 @@ Ui.Panel {
                     color: root.barForeground
                     font.pixelSize: Style.font.bodySmall
                 }
-                Button {
+                CanvasButton {
+                    foreground: root.barForeground
                     text: "Refresh"
                     enabled: root.hostWidget && !root.hostWidget.busy && !root.hostWidget.needsSetup
                     onClicked: root.hostWidget.refresh()
                 }
-                Button {
+                CanvasButton {
+                    foreground: root.barForeground
                     visible: root.hostWidget && root.hostWidget.needsSetup
                     text: "Connect Canvas and choose courses"
                     onClicked: root.openSettings()

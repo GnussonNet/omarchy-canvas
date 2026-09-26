@@ -3,10 +3,11 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell.Io
 import qs.Commons
+import qs.Ui as Ui
 
 Item {
     id: root
-    property color foreground: "white"
+    property color foreground: Color.foreground
     property bool onboarding: false
     property bool readerBusy: false
     property bool configured: false
@@ -135,8 +136,9 @@ Item {
                 wrapMode: Text.Wrap
             }
             Label { text: "Canvas site URL"; color: root.foreground }
-            TextField {
+            Ui.TextField {
                 id: urlField
+                foreground: root.foreground
                 width: parent.width
                 enabled: !root.busy
                 placeholderText: "https://school.instructure.com"
@@ -147,8 +149,9 @@ Item {
                 KeyNavigation.tab: tokenField
             }
             Label { text: "Access token"; color: root.foreground }
-            TextField {
+            Ui.TextField {
                 id: tokenField
+                foreground: root.foreground
                 width: parent.width
                 enabled: !root.busy
                 echoMode: TextInput.Password
@@ -182,8 +185,9 @@ Item {
                 wrapMode: Text.Wrap
                 Accessible.role: Accessible.AlertMessage
             }
-            Button {
+            CanvasButton {
                 id: saveButton
+                foreground: root.foreground
                 text: "Connect"
                 enabled: !root.busy && !root.readerBusy && urlField.text.trim().length > 0
                 onClicked: root.save()
@@ -206,31 +210,26 @@ Item {
                 }
                 Repeater {
                     model: root.courses
-                    CheckBox {
-                        id: courseCheck
+                    Ui.Toggle {
                         required property var modelData
                         width: parent.width
-                        text: modelData.name
+                        label: modelData.name
+                        foreground: root.foreground
                         checked: root.selectedIds.indexOf(modelData.id) >= 0
                         enabled: !root.busy
-                        onToggled: root.chooseCourse(modelData.id, checked)
-                        contentItem: Text {
-                            text: courseCheck.text
-                            textFormat: Text.PlainText
-                            color: root.foreground
-                            wrapMode: Text.Wrap
-                            leftPadding: courseCheck.indicator.width + courseCheck.spacing
-                            verticalAlignment: Text.AlignVCenter
-                        }
+                        opacity: enabled ? 1 : 0.45
+                        onClicked: root.chooseCourse(modelData.id, !checked)
                     }
                 }
-                Button {
+                CanvasButton {
+                    foreground: root.foreground
                     text: "Save courses and show assignments"
                     enabled: !root.busy && !root.readerBusy
                     onClicked: root.saveCourses()
                 }
             }
-            Button {
+            CanvasButton {
+                foreground: root.foreground
                 text: "Back to assignments"
                 enabled: !saver.running
                 onClicked: { root.clearSecret(); root.cancelled() }
