@@ -6,7 +6,7 @@ import qs.Ui as Ui
 
 Ui.Panel {
     id: root
-    moduleName: "filip.canvas"
+    moduleName: "canvas.assignments"
     manageIpc: false
     property var anchorItem: null
     property var hostWidget: null

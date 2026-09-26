@@ -4,7 +4,7 @@ import qs.Ui as Ui
 
 Ui.BarWidget {
     id: root
-    moduleName: "filip.canvas"
+    moduleName: "canvas.assignments"
     property var assignments: []
     property var warnings: []
     property string error: ""

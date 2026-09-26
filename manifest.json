@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "filip.canvas",
-  "name": "Canvas Assignments",
+  "id": "canvas.assignments",
+  "name": "Omarchy Canvas",
   "version": "1.0.0",
   "author": "Filip Magnusson",
   "license": "MIT",
@@ -9,7 +9,7 @@
   "kinds": ["bar-widget"],
   "entryPoints": {"barWidget": "BarWidget.qml"},
   "barWidget": {
-    "displayName": "Canvas Assignments",
+    "displayName": "Omarchy Canvas",
     "category": "Education",
     "allowMultiple": false,
     "defaultSection": "right"

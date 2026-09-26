@@ -1,4 +1,4 @@
-# Canvas Assignments for Omarchy
+# Omarchy Canvas
 
 A read-only Canvas widget for the right side of the Omarchy Quattro bar.
 Click **Canvas** to see assignments due from now through the next 7 × 24 hours,
@@ -19,10 +19,11 @@ Once this repository is published, replace `YOUR_GITHUB_USERNAME`:
 
 ```sh
 omarchy plugin add https://github.com/YOUR_GITHUB_USERNAME/omarchy-canvas.git --enable
-omarchy bar move filip.canvas --section right
-python3 ~/.config/omarchy/plugins/filip.canvas/canvas.py --configure
+omarchy bar move canvas.assignments --section right
+python3 ~/.config/omarchy/plugins/canvas.assignments/canvas.py --configure
 ```
 
+The plugin ID is `canvas.assignments`; `omarchy.*` IDs are reserved for built-ins.
 The manifest defaults to the right section of your existing bar. A top bar places
 it at the top right. This plugin does not move the bar itself.
 
@@ -89,8 +90,8 @@ resolve Quickshell's runtime `qs.*` imports; distinguish import warnings from
 actual QML errors. Check the live shell log after installing:
 
 ```sh
-omarchy-shell shell summon filip.canvas '{}'
-omarchy-shell shell hide filip.canvas
+omarchy-shell shell summon canvas.assignments '{}'
+omarchy-shell shell hide canvas.assignments
 qs log -p /usr/share/omarchy/shell --tail 100
 ```
 
@@ -116,7 +117,7 @@ Direct Git installation does not require a marketplace listing.
 ## Remove
 
 ```sh
-omarchy plugin remove filip.canvas
+omarchy plugin remove canvas.assignments
 ```
 
 Removal leaves your private configuration intact. Delete
