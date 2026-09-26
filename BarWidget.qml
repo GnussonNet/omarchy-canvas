@@ -11,6 +11,7 @@ Ui.BarWidget {
     property string updatedAt: ""
     property bool needsSetup: false
     property int selectedCourseCount: 0
+    property int daysAhead: 7
     property bool refreshCancelled: false
     readonly property bool busy: fetcher.running
     readonly property bool opened: panelLoader.item ? panelLoader.item.opened : false
@@ -64,6 +65,7 @@ Ui.BarWidget {
                         root.warnings = result.warnings
                         root.updatedAt = result.updated_at
                         root.selectedCourseCount = result.selected_course_count || 0
+                        root.daysAhead = result.days_ahead || 7
                         root.error = ""
                     } else {
                         root.needsSetup = result.needs_setup === true
@@ -87,8 +89,8 @@ Ui.BarWidget {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: "Canvas " + (root.needsSetup ? "Setup" : root.error ? "!" : root.assignments.length) + (root.warnings.length ? " !" : "")
-        tooltipText: "Assignments due in the next 7 days" + (root.busy ? " · Refreshing…" : "")
+        text: "Assignments " + (root.needsSetup ? "Setup" : root.error ? "!" : root.assignments.length) + (root.warnings.length ? " !" : "")
+        tooltipText: "Assignments due in the next " + root.daysAhead + " days" + (root.busy ? " · Refreshing…" : "")
         onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton) root.toggle() }
     }
 }

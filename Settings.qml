@@ -16,6 +16,7 @@ Item {
     property var courses: []
     property var selectedIds: []
     property bool connected: false
+    property int daysAhead: 7
     readonly property bool busy: metadata.running || saver.running
     readonly property bool saving: saver.running
     readonly property string script: decodeURIComponent(Qt.resolvedUrl("canvas.py").toString().replace(/^file:\/\//, ""))
@@ -30,6 +31,7 @@ Item {
         savedUrl = result.url
         courses = result.courses || []
         selectedIds = result.selected_course_ids || []
+        daysAhead = result.days_ahead || 7
     }
     function chooseCourse(courseId, checked) {
         var ids = selectedIds.slice()
@@ -42,7 +44,7 @@ Item {
         if (busy || readerBusy || !urlField.text.trim()) return
         message = ""
         saver.mode = "--save-settings"
-        saver.payload = JSON.stringify({url: urlField.text.trim(), token: tokenField.text})
+        saver.payload = JSON.stringify({url: urlField.text.trim(), token: tokenField.text, days_ahead: daysField.field.value})
         clearSecret()
         saver.running = true
     }
@@ -50,7 +52,7 @@ Item {
         if (busy || !connected) return
         message = ""
         saver.mode = "--select-courses"
-        saver.payload = JSON.stringify({url: savedUrl, selected_course_ids: selectedIds})
+        saver.payload = JSON.stringify({url: savedUrl, selected_course_ids: selectedIds, days_ahead: daysField.field.value})
         saver.running = true
     }
     Keys.onEscapePressed: function(event) {
@@ -115,11 +117,22 @@ Item {
             if (exitCode !== 0) root.message = "Could not save settings. Check Python 3 is installed."
         }
     }
-    ScrollView {
+    Flickable {
+        id: settingsScroll
         anchors.fill: parent
-        contentWidth: availableWidth
+        anchors.rightMargin: Style.space(18)
+        contentWidth: width
+        contentHeight: settingsContent.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: CanvasScrollBar {
+            parent: root
+            foreground: root.foreground
+            anchors { left: settingsScroll.right; leftMargin: Style.space(8); top: settingsScroll.top; bottom: settingsScroll.bottom }
+        }
         Column {
-            width: root.width
+            id: settingsContent
+            width: settingsScroll.width
             spacing: Style.space(12)
             Text {
                 width: parent.width
@@ -196,6 +209,16 @@ Item {
                 width: parent.width
                 visible: root.connected
                 spacing: Style.space(8)
+                Ui.NumberField {
+                    id: daysField
+                    label: "Days ahead (default 7)"
+                    foreground: root.foreground
+                    from: 1
+                    to: 90
+                    value: root.daysAhead
+                    enabled: !root.busy
+                    onModified: function(value) { root.daysAhead = value }
+                }
                 Text {
                     width: parent.width
                     text: "Courses · " + root.selectedIds.length + " selected"
@@ -223,7 +246,7 @@ Item {
                 }
                 CanvasButton {
                     foreground: root.foreground
-                    text: "Save courses and show assignments"
+                    text: "Save settings and show assignments"
                     enabled: !root.busy && !root.readerBusy
                     onClicked: root.saveCourses()
                 }

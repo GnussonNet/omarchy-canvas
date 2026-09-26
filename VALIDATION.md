@@ -2,9 +2,10 @@
 
 Validated on the development machine, 2026-09-26:
 
-- `python3 -m unittest discover -s tests -v`: 20 tests passed, including private
+- `python3 -m unittest discover -s tests -v`: 24 tests passed, including private
   credential storage, token retention, failed connection checks, selected-course
-  requests, empty selections, and migration without network requests.
+  requests, empty selections, migration without network requests, configurable
+  date boundaries, and persistence/validation of the look-ahead period.
 - `omarchy plugin validate .`: passed.
 - Qt 6 `qmllint`: imports resolved using a temporary import root with `qs`
   pointing to `/usr/share/omarchy/shell`. No syntax or unresolved-import errors.

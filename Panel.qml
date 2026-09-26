@@ -12,6 +12,7 @@ Ui.Panel {
     property var hostWidget: null
     property bool editingSettings: false
     readonly property bool showSettings: editingSettings
+    readonly property int daysAhead: hostWidget ? hostWidget.daysAhead : 7
     function openSettings() {
         editingSettings = true
         if (hostWidget) hostWidget.cancelRefresh()
@@ -53,7 +54,7 @@ Ui.Panel {
                         width: parent.width - settingsButton.width
                         height: settingsButton.height
                         verticalAlignment: Text.AlignVCenter
-                        text: "Canvas · Next 7 days"
+                        text: "Canvas · Next " + root.daysAhead + (root.daysAhead === 1 ? " day" : " days")
                         color: root.barForeground
                         font.family: Style.font.family
                         font.pixelSize: Style.font.subtitle
@@ -61,7 +62,8 @@ Ui.Panel {
                     }
                     Ui.PanelActionButton {
                         id: settingsButton
-                        iconText: "⚙"
+                        iconText: "󰒓"
+                        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                         foreground: root.barForeground
                         focusable: true
                         Accessible.name: "Canvas settings"
@@ -102,11 +104,16 @@ Ui.Panel {
             ListView {
                 id: list
                 visible: !root.showSettings
-                anchors { top: header.bottom; topMargin: Style.space(12); left: parent.left; right: parent.right; bottom: parent.bottom }
+                anchors { top: header.bottom; topMargin: Style.space(12); left: parent.left; right: parent.right; rightMargin: Style.space(18); bottom: parent.bottom }
                 clip: true
                 spacing: Style.space(8)
                 model: root.hostWidget ? root.hostWidget.assignments : []
-                ScrollBar.vertical: ScrollBar {}
+                ScrollBar.vertical: CanvasScrollBar {
+                    parent: list.parent
+                    visible: list.visible && size < 1
+                    foreground: root.barForeground
+                    anchors { left: list.right; leftMargin: Style.space(8); top: list.top; bottom: list.bottom }
+                }
                 delegate: Rectangle {
                     id: row
                     required property var modelData
@@ -157,7 +164,7 @@ Ui.Panel {
                     width: parent.width
                     visible: list.count === 0 && root.hostWidget && !root.hostWidget.busy && !root.hostWidget.error
                     text: root.hostWidget && root.hostWidget.warnings.length ? "Some courses could not be checked." :
-                        root.hostWidget && root.hostWidget.selectedCourseCount === 0 ? "No courses selected. Choose courses in Settings." : "No assignments due in the next 7 days."
+                        root.hostWidget && root.hostWidget.selectedCourseCount === 0 ? "No courses selected. Choose courses in Settings." : "No assignments due in the next " + root.daysAhead + " days."
                     wrapMode: Text.Wrap
                     color: root.barForeground
                 }

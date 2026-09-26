@@ -98,9 +98,15 @@ def submission_status(assignment):
     return "Not submitted"
 
 
-def collect(client, courses, now=None):
+def validate_days(value):
+    if type(value) is not int or not 1 <= value <= 90:
+        raise CanvasError("Days ahead must be a whole number from 1 to 90.")
+    return value
+
+
+def collect(client, courses, now=None, days_ahead=7):
     now = now or datetime.now(timezone.utc)
-    end = now + timedelta(days=7)
+    end = now + timedelta(days=validate_days(days_ahead))
     rows, warnings = [], []
     for course in courses:
         cid = str(course["id"])
@@ -127,7 +133,7 @@ def collect(client, courses, now=None):
         except CanvasError as e:
             warnings.append(name + ": " + str(e))
     rows.sort(key=lambda row: (row["due_at"], row["course"], row["name"]))
-    return {"ok": True, "assignments": rows, "warnings": warnings, "updated_at": now.isoformat()}
+    return {"ok": True, "assignments": rows, "warnings": warnings, "updated_at": now.isoformat(), "days_ahead": days_ahead}
 
 
 def configure():
@@ -174,6 +180,7 @@ def public_settings(config):
             "courses": config.get("courses", []),
             "courses_loaded": "courses" in config,
             "selected_course_ids": config.get("selected_course_ids", []),
+            "days_ahead": validate_days(config.get("days_ahead", 7)),
             "selection_saved": config.get("selection_saved", False)}
 
 
@@ -191,6 +198,7 @@ def save_settings(data):
             raise CanvasError("Enter a new token when changing the Canvas site.")
         token = existing["token"]
     validate_token(token)
+    days = validate_days(data.get("days_ahead", existing.get("days_ahead", 7) if existing else 7))
     # Verify access before replacing working credentials. GET only, no Canvas writes.
     client = Client(base, token)
     courses = []
@@ -204,7 +212,7 @@ def save_settings(data):
     selected = existing.get("selected_course_ids", []) if same_account else []
     config = {"url": base, "token": token, "courses": courses,
               "selected_course_ids": [c["id"] for c in courses if c["id"] in selected],
-              "selection_saved": False}
+              "selection_saved": False, "days_ahead": days}
     write_config(config)
     return public_settings(config)
 
@@ -218,6 +226,7 @@ def select_courses(data):
     if not isinstance(selected, list) or any(not isinstance(cid, str) or cid not in allowed for cid in selected):
         raise CanvasError("Choose courses from the connected account.")
     config["selected_course_ids"] = list(dict.fromkeys(selected))
+    config["days_ahead"] = validate_days(data.get("days_ahead", config.get("days_ahead", 7)))
     config["selection_saved"] = True
     write_config(config)
     return public_settings(config)
@@ -229,7 +238,8 @@ def read_assignments():
         return {"ok": False, "needs_setup": True, "error": "Open Settings, connect, and choose the courses to follow."}
     selected = set(config.get("selected_course_ids", []))
     courses = [course for course in config.get("courses", []) if course["id"] in selected]
-    result = collect(Client(config["url"], config["token"]), courses)
+    result = collect(Client(config["url"], config["token"]), courses,
+                     days_ahead=validate_days(config.get("days_ahead", 7)))
     result["selected_course_count"] = len(courses)
     return result
 

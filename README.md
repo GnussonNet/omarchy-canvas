@@ -1,7 +1,7 @@
 # Omarchy Canvas
 
 A read-only Canvas widget for the right side of the Omarchy Quattro bar.
-Click **Canvas** to see assignments due from now through the next 7 × 24 hours,
+Click **Assignments** to see assignments due from now through the next 7 × 24 hours by default,
 sorted by deadline, from the courses you choose. Submitted assignments
 stay visible. Each row opens the assignment in your default browser.
 
@@ -28,10 +28,11 @@ it at the top right. This plugin does not move the bar itself.
 
 Setup happens entirely in the plugin—no terminal credential command is needed.
 
-1. Click **Canvas** in the bar, then the **⚙ settings icon** at the top right.
+1. Click **Assignments** in the bar, then the **settings gear** at the top right.
 2. Enter your Canvas site URL and access token, then click **Connect**.
 3. Once connected, the settings page lists all your active student courses.
-4. Check the courses you want, then click **Save courses and show assignments**.
+4. Choose **Days ahead** (1–90, default 7) and check the courses you want.
+5. Click **Save settings and show assignments**.
 
 The panel has two pages: assignments and settings. Use the gear to revisit
 settings and **Back to assignments** to return without saving course changes.
@@ -43,7 +44,7 @@ Create a token in Canvas under **Account → Settings → Approved Integrations 
 New Access Token**, if your institution allows it. The token field is masked.
 Never put a token in a Git repository, shell command, screenshot, or issue.
 
-Open **Canvas → ⚙** later to update the connection. Leave the token blank
+Open **Assignments → settings gear** later to update the connection or look-ahead period. Leave the token blank
 to keep the saved token for the same site; changing the site requires a token.
 **Connect** replaces credentials only after the course list loads successfully.
 It refreshes the course list and asks you to confirm your selection. Course

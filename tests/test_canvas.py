@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
-from canvas import CanvasError, Client, NoRedirect, collect, origin, submission_status, save_settings, settings_info, select_courses, read_assignments
+from canvas import CanvasError, Client, NoRedirect, collect, origin, submission_status, save_settings, settings_info, select_courses, read_assignments, validate_days
 
 
 class ReaderTests(unittest.TestCase):
@@ -82,6 +82,24 @@ class ReaderTests(unittest.TestCase):
         result = collect(client, [{"id": "1", "name": "Math"}, {"id": "2", "name": "Art"}])
         self.assertEqual(result["warnings"], ["Math: Access denied"])
 
+    def test_custom_window_includes_boundary_and_excludes_later(self):
+        now = datetime(2026, 9, 26, 12, tzinfo=timezone.utc)
+        source = [{"id": i, "name": "Assignment", "due_at": (now + timedelta(days=days)).isoformat()}
+                  for i, days in enumerate([3, 10, 14, 15], start=1)]
+        client = Mock(base="https://canvas.example")
+        client.pages.return_value = source
+        courses = [{"id": "1", "name": "Math"}]
+        result = collect(client, courses, now, days_ahead=14)
+        self.assertEqual([r["id"] for r in result["assignments"]], ["1:1", "1:2", "1:3"])
+        self.assertEqual(result["days_ahead"], 14)
+        result = collect(client, courses, now, days_ahead=3)
+        self.assertEqual([r["id"] for r in result["assignments"]], ["1:1"])
+
+    def test_days_validation(self):
+        for value in [0, -1, 91, True, 1.5, "7", None]:
+            with self.subTest(value=value), self.assertRaises(CanvasError):
+                validate_days(value)
+
 
 class SettingsTests(unittest.TestCase):
     def setUp(self):
@@ -102,7 +120,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.path.parent.stat().st_mode & 0o777, 0o700)
         self.get.assert_called_once_with("https://canvas.example/api/v1/courses?enrollment_type=student&enrollment_state=active&per_page=100")
-        self.assertEqual(settings_info(), {"ok": True, "configured": True, "url": "https://canvas.example", "courses": [], "courses_loaded": True, "selected_course_ids": [], "selection_saved": False})
+        self.assertEqual(settings_info(), {"ok": True, "configured": True, "url": "https://canvas.example", "courses": [], "courses_loaded": True, "selected_course_ids": [], "selection_saved": False, "days_ahead": 7})
 
     def test_failed_connection_preserves_credentials(self):
         save_settings({"url": "https://canvas.example", "token": "original"})
@@ -189,6 +207,21 @@ class SettingsTests(unittest.TestCase):
         os.chmod(self.path, 0o600)
         self.assertTrue(read_assignments()["needs_setup"])
         self.get.assert_not_called()
+
+    def test_days_saved_and_used_on_refresh(self):
+        self.connect_courses()
+        select_courses({"url": "https://canvas.example", "selected_course_ids": ["1"], "days_ahead": 14})
+        self.assertEqual(settings_info()["days_ahead"], 14)
+        self.get.return_value = ([], None)
+        self.assertEqual(read_assignments()["days_ahead"], 14)
+        self.assertEqual(save_settings({"url": "https://canvas.example", "token": ""})["days_ahead"], 14)
+
+    def test_invalid_days_preserve_settings(self):
+        self.connect_courses()
+        original = self.path.read_text()
+        with self.assertRaises(CanvasError):
+            select_courses({"url": "https://canvas.example", "selected_course_ids": ["1"], "days_ahead": 100})
+        self.assertEqual(self.path.read_text(), original)
 
 
 if __name__ == "__main__":
