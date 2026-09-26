@@ -15,10 +15,10 @@ stay visible. Each row opens the assignment in your default browser.
 
 ## Install
 
-Once this repository is published, replace `YOUR_GITHUB_USERNAME`:
+Install from [GnussonNet/omarchy-canvas](https://github.com/GnussonNet/omarchy-canvas):
 
 ```sh
-omarchy plugin add https://github.com/YOUR_GITHUB_USERNAME/omarchy-canvas.git --enable
+omarchy plugin add https://github.com/GnussonNet/omarchy-canvas.git --enable
 omarchy bar move canvas.assignments --section right
 python3 ~/.config/omarchy/plugins/canvas.assignments/canvas.py --configure
 ```
@@ -98,20 +98,14 @@ qs log -p /usr/share/omarchy/shell --tail 100
 Also check scrolling, browser links, Escape, disable/re-enable and shell restart.
 Tests use synthetic responses and never contact Canvas.
 
-## Publish
+## Repository and marketplace
 
 The root manifest, README and MIT license follow the
 [development guide](https://plugins.omarchy.org/develop.html) and
 [publishing guide](https://plugins.omarchy.org/publish.html).
-After authenticating GitHub's CLI, from this folder:
-
-```sh
-gh auth login
-gh repo create omarchy-canvas --public --source=. --remote=origin --push
-```
-
-Update the install URL above to the resulting repository URL. Marketplace listing
-is optional; submit that URL through the publishing guide's issue form if desired.
+The source repository is [GnussonNet/omarchy-canvas](https://github.com/GnussonNet/omarchy-canvas).
+Marketplace listing is optional; submit the repository URL through the publishing
+guide's issue form if desired.
 Direct Git installation does not require a marketplace listing.
 
 ## Remove
