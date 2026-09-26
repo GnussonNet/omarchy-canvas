@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "filip.canvas",
+  "name": "Canvas Assignments",
+  "version": "1.0.0",
+  "author": "Filip Magnusson",
+  "license": "MIT",
+  "description": "Read-only Canvas assignments due in the next seven days, with submission status and browser links.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget": "BarWidget.qml"},
+  "barWidget": {
+    "displayName": "Canvas Assignments",
+    "category": "Education",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
