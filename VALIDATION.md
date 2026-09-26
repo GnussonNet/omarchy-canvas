@@ -11,6 +11,10 @@ Validated on the development machine, 2026-09-26:
   Remaining warnings concern runtime QObject properties and Quickshell's
   `QProcess::ExitStatus` type metadata.
 
-Not yet verified: live Canvas responses, on-desktop rendering, onboarding/settings interactions,
+- Live desktop check: after restarting the shell, the installed assignments
+  panel displays both the settings gear and the setup button. Reinstalling alone
+  had left the previous UI loaded in the running shell.
+
+Not yet verified: live Canvas responses, onboarding/settings interactions,
 browser launch, and install/remove lifecycle. These need local installation and
 Canvas credentials. No real Canvas API request was made during development.

@@ -66,6 +66,15 @@ omarchy plugin update canvas.assignments
 
 Then open **⚙**, connect, and choose your courses.
 
+If an update or reinstall still shows the old panel without the settings gear,
+restart the shell to clear its loaded QML components:
+
+```sh
+omarchy restart shell
+```
+
+This briefly restarts the bar and shell UI; it does not remove Canvas credentials.
+
 ## Behavior
 
 - Refreshes on startup, after saving course choices, every five minutes, and with
