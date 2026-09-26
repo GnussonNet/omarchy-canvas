@@ -10,6 +10,14 @@ Ui.Panel {
     manageIpc: false
     property var anchorItem: null
     property var hostWidget: null
+    property bool editingSettings: false
+    readonly property bool showSettings: editingSettings || (hostWidget ? hostWidget.needsSetup : false)
+    onOpenedChanged: {
+        if (!opened && settingsLoader.item) {
+            settingsLoader.item.clearSecret()
+            if (!settingsLoader.item.saving) editingSettings = false
+        }
+    }
     function switchPanel(direction) {
         if (root.bar && typeof root.bar.switchPanelFrom === "function")
             return root.bar.switchPanelFrom(root.hostWidget || root, direction)
@@ -21,16 +29,18 @@ Ui.Panel {
         owner: root.hostWidget || root
         bar: root.bar
         open: root.opened
-        focusTarget: keyCatcher
+        focusTarget: root.showSettings ? (settingsLoader.item as Item) : keyCatcher
         contentWidth: panel.fittedContentWidth(Style.space(430))
         contentHeight: panel.fittedContentHeight(Style.space(500))
         Ui.PanelKeyCatcher {
             id: keyCatcher
             anchors.fill: parent
+            blocked: root.showSettings
             onCloseRequested: root.close()
             onTabRequested: function(direction) { root.switchPanel(direction) }
             Column {
                 id: header
+                visible: !root.showSettings
                 width: parent.width
                 spacing: Style.space(8)
                 Text {
@@ -62,9 +72,15 @@ Ui.Panel {
                     text: "Refresh"
                     onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton && root.hostWidget) root.hostWidget.refresh() }
                 }
+                Ui.WidgetButton {
+                    bar: root.bar
+                    text: "Settings"
+                    onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton) root.editingSettings = true }
+                }
             }
             ListView {
                 id: list
+                visible: !root.showSettings
                 anchors { top: header.bottom; topMargin: Style.space(12); left: parent.left; right: parent.right; bottom: parent.bottom }
                 clip: true
                 spacing: Style.space(8)
@@ -122,6 +138,25 @@ Ui.Panel {
                     text: root.hostWidget && root.hostWidget.warnings.length ? "Some courses could not be checked." : "No assignments due in the next 7 days."
                     wrapMode: Text.Wrap
                     color: root.barForeground
+                }
+            }
+            Loader {
+                id: settingsLoader
+                anchors.fill: parent
+                active: root.showSettings
+                visible: active
+                sourceComponent: Settings {
+                    foreground: root.barForeground
+                    onboarding: root.hostWidget ? root.hostWidget.needsSetup : false
+                    readerBusy: root.hostWidget ? root.hostWidget.busy : false
+                    onSaved: {
+                        root.editingSettings = false
+                        if (root.hostWidget) root.hostWidget.settingsSaved()
+                    }
+                    onCancelled: {
+                        if (onboarding) root.close()
+                        else root.editingSettings = false
+                    }
                 }
             }
         }

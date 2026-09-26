@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import signal
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
@@ -145,13 +146,71 @@ def configure():
     print("Saved private configuration to " + str(path))
 
 
+def read_config():
+    path = config_path()
+    if path.stat().st_mode & 0o077:
+        raise CanvasError("Credential file must be private. Run chmod 600 on " + str(path))
+    config = json.loads(path.read_text())
+    config["url"] = origin(config["url"])
+    validate_token(config["token"])
+    return config
+
+
+def validate_token(token):
+    if not isinstance(token, str) or not token.strip() or any(ord(c) < 33 or ord(c) > 126 for c in token):
+        raise CanvasError("Enter a valid Canvas access token without spaces or line breaks.")
+
+
+def settings_info():
+    try:
+        config = read_config()
+    except FileNotFoundError:
+        return {"ok": True, "configured": False, "url": ""}
+    # The saved token is never sent back to the UI.
+    return {"ok": True, "configured": True, "url": config["url"]}
+
+
+def save_settings(data):
+    base = origin(data["url"].strip())
+    token = data.get("token", "").strip()
+    if not token:
+        try:
+            existing = read_config()
+        except FileNotFoundError:
+            raise CanvasError("Enter your Canvas access token.") from None
+        if existing["url"] != base:
+            raise CanvasError("Enter a new token when changing the Canvas site.")
+        token = existing["token"]
+    validate_token(token)
+    # Verify access before replacing working credentials. GET only, no Canvas writes.
+    client = Client(base, token)
+    client.get(base + "/api/v1/courses?enrollment_type=student&per_page=1")
+    path = config_path()
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".config-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as out:
+            json.dump({"url": base, "token": token}, out)
+            out.write("\n")
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    return {"ok": True, "configured": True, "url": base}
+
+
 def refresh_timeout(*_):
     raise CanvasError("Canvas refresh timed out.")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--configure", action="store_true", help="save credentials locally using a hidden token prompt")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--configure", action="store_true", help="save credentials locally using a hidden token prompt")
+    modes.add_argument("--settings-info", action="store_true", help="return configuration status without the token")
+    modes.add_argument("--save-settings", action="store_true", help="validate and save settings supplied as JSON on stdin")
     args = parser.parse_args()
     try:
         if args.configure:
@@ -159,16 +218,16 @@ def main():
             return
         signal.signal(signal.SIGALRM, refresh_timeout)
         signal.alarm(120)
-        path = config_path()
-        if path.stat().st_mode & 0o077:
-            raise CanvasError("Credential file must be private. Run chmod 600 on " + str(path))
-        config = json.loads(path.read_text())
-        token = config["token"]
-        if not isinstance(token, str) or not token.strip() or "\n" in token or "\r" in token:
-            raise CanvasError("Invalid Canvas token configuration.")
-        print(json.dumps(collect(Client(config["url"], token))))
+        if args.settings_info:
+            result = settings_info()
+        elif args.save_settings:
+            result = save_settings(json.loads(sys.stdin.readline(16384)))
+        else:
+            config = read_config()
+            result = collect(Client(config["url"], config["token"]))
+        print(json.dumps(result))
     except FileNotFoundError:
-        print(json.dumps({"ok": False, "error": "Setup needed: run python3 canvas.py --configure from the plugin folder."}))
+        print(json.dumps({"ok": False, "needs_setup": True, "error": "Connect your Canvas account to get started."}))
     except FileExistsError:
         print("Configuration already exists; edit it locally to change credentials.", file=sys.stderr)
         sys.exit(1)

@@ -9,13 +9,24 @@ Ui.BarWidget {
     property var warnings: []
     property string error: ""
     property string updatedAt: ""
+    property bool needsSetup: false
     readonly property bool busy: fetcher.running
     readonly property bool opened: panelLoader.item ? panelLoader.item.opened : false
     readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing : false
     implicitWidth: button.implicitWidth
     implicitHeight: button.implicitHeight
 
-    function refresh() { if (!fetcher.running) fetcher.running = true }
+    function refresh() {
+        if (!fetcher.running && !(panelLoader.item && panelLoader.item.showSettings)) fetcher.running = true
+    }
+    function settingsSaved() {
+        needsSetup = false
+        assignments = []
+        warnings = []
+        updatedAt = ""
+        error = ""
+        Qt.callLater(refresh)
+    }
     function open() { if (panelLoader.item) { refresh(); panelLoader.item.open() } }
     function close() { if (panelLoader.item) panelLoader.item.close() }
     function toggle() { if (opened) close(); else open() }
@@ -38,11 +49,15 @@ Ui.BarWidget {
                 try {
                     var result = JSON.parse(text)
                     if (result.ok) {
+                        root.needsSetup = false
                         root.assignments = result.assignments
                         root.warnings = result.warnings
                         root.updatedAt = result.updated_at
                         root.error = ""
-                    } else root.error = result.error
+                    } else {
+                        root.needsSetup = result.needs_setup === true
+                        root.error = result.error
+                    }
                 } catch (e) { root.error = "Canvas reader failed. Check Python 3 is installed." }
             }
         }
@@ -61,7 +76,7 @@ Ui.BarWidget {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: "Canvas " + (root.error ? "!" : root.assignments.length) + (root.warnings.length ? " !" : "")
+        text: "Canvas " + (root.needsSetup ? "Setup" : root.error ? "!" : root.assignments.length) + (root.warnings.length ? " !" : "")
         tooltipText: "Assignments due in the next 7 days" + (root.busy ? " · Refreshing…" : "")
         onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton) root.toggle() }
     }

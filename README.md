@@ -20,26 +20,46 @@ Install from [GnussonNet/omarchy-canvas](https://github.com/GnussonNet/omarchy-c
 ```sh
 omarchy plugin add https://github.com/GnussonNet/omarchy-canvas.git --enable
 omarchy bar move canvas.assignments --section right
-python3 ~/.config/omarchy/plugins/canvas.assignments/canvas.py --configure
 ```
 
 The plugin ID is `canvas.assignments`; `omarchy.*` IDs are reserved for built-ins.
 The manifest defaults to the right section of your existing bar. A top bar places
 it at the top right. This plugin does not move the bar itself.
 
+Click **Canvas Setup** in the bar to open the first-run onboarding. Enter your
+Canvas site root and access token, then click **Connect Canvas**. The plugin
+checks the connection with a read-only request before saving and loading your
+assignments. You can dismiss onboarding with **Set up later**.
+
 Create a token in Canvas under **Account → Settings → Approved Integrations →
-New Access Token**, if your institution allows it. Use the interactive setup
-above to enter the Canvas site root and hidden token. Never put a token in a
-Git repository, shell command, screenshot, or issue.
+New Access Token**, if your institution allows it. The token field is masked.
+Never put a token in a Git repository, shell command, screenshot, or issue.
+
+Open **Canvas → Settings** later to update the connection. Leave the token blank
+to keep the saved token for the same site; changing the site requires a token.
+**Test connection and save** replaces credentials only after the check succeeds.
+Cancel discards unsaved edits. Saving checks course access; assignment-access
+errors are reported separately when assignments load.
 
 Setup writes `$XDG_CONFIG_HOME/omarchy-canvas/config.json` (normally
 `~/.config/omarchy-canvas/config.json`) with mode `0600`, outside the plugin
-repository. Existing configuration is not overwritten. Edit that file locally
-to rotate credentials; the next refresh reads it again. Its shape is:
+repository. Settings updates replace this file atomically with the same private
+permissions. Like a `.env` file, it is plain text, not encrypted: other programs
+running as your user can read it. The graphical form does not change that storage
+model. Its shape is:
 
 ```json
 {"url": "https://school.instructure.com", "token": "YOUR_PRIVATE_TOKEN"}
 ```
+
+Optional terminal setup is still available for a new configuration:
+
+```sh
+python3 ~/.config/omarchy/plugins/canvas.assignments/canvas.py --configure
+```
+
+The terminal command refuses to overwrite existing credentials; use Settings
+to update them.
 
 ## Behavior
 
@@ -65,7 +85,10 @@ mark submissions as read). There are no submit, upload, edit, delete, or grading
 operations. Pagination is checked against the same HTTPS origin and allowed
 routes; redirects are refused so credentials cannot follow them elsewhere.
 
-The plugin never passes the token on the command line, to QML, or to the browser.
+The saved token is never read back into QML. A newly entered token briefly lives
+in the masked form, is sent to Python through standard input, and is cleared
+from the form when sent or when the panel closes. It is never passed on the
+command line or to the browser, or included in helper responses or logs.
 It uses no telemetry, persistent assignment cache, background service, installer
 hook, privileged command, or remote build. Assignment data is held in shell
 memory. Omarchy plugins run unsandboxed with your user permissions.
@@ -81,7 +104,7 @@ read-only plugin.
 ```sh
 python3 -m unittest discover -s tests -v
 omarchy plugin validate .
-qmllint -I /usr/share/omarchy/shell BarWidget.qml Panel.qml
+qmllint -I /usr/share/omarchy/shell BarWidget.qml Panel.qml Settings.qml
 python3 canvas.py
 ```
 
@@ -95,7 +118,8 @@ omarchy-shell shell hide canvas.assignments
 qs log -p /usr/share/omarchy/shell --tail 100
 ```
 
-Also check scrolling, browser links, Escape, disable/re-enable and shell restart.
+Also check onboarding, settings updates, failed connection checks, text-field
+keyboard input, scrolling, browser links, Escape, disable/re-enable and shell restart.
 Tests use synthetic responses and never contact Canvas.
 
 ## Repository and marketplace

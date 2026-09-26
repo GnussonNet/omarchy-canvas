@@ -1,10 +1,13 @@
 import io
 import json
 import unittest
+import os
+import tempfile
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from canvas import CanvasError, Client, NoRedirect, collect, origin, submission_status
+from canvas import CanvasError, Client, NoRedirect, collect, origin, submission_status, save_settings, settings_info
 
 
 class ReaderTests(unittest.TestCase):
@@ -78,6 +81,66 @@ class ReaderTests(unittest.TestCase):
         client.pages.side_effect = [[{"id": "1", "name": "Math"}, {"id": "2", "name": "Art"}], CanvasError("Access denied"), []]
         result = collect(client)
         self.assertEqual(result["warnings"], ["Math: Access denied"])
+
+
+class SettingsTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = Path(self.directory.name) / "private" / "config.json"
+        self.location = patch("canvas.config_path", return_value=self.path)
+        self.location.start()
+        self.addCleanup(self.location.stop)
+        self.get = patch("canvas.Client.get", return_value=([], None)).start()
+        self.addCleanup(patch.stopall)
+
+    def test_onboarding_and_private_save(self):
+        self.assertEqual(settings_info(), {"ok": True, "configured": False, "url": ""})
+        result = save_settings({"url": "https://canvas.example/", "token": "private-token"})
+        self.assertTrue(result["ok"])
+        self.assertNotIn("private-token", json.dumps(result))
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.path.parent.stat().st_mode & 0o777, 0o700)
+        self.get.assert_called_once_with("https://canvas.example/api/v1/courses?enrollment_type=student&per_page=1")
+        self.assertEqual(settings_info(), {"ok": True, "configured": True, "url": "https://canvas.example"})
+
+    def test_failed_connection_preserves_credentials(self):
+        save_settings({"url": "https://canvas.example", "token": "original"})
+        self.get.side_effect = CanvasError("Token rejected")
+        with self.assertRaises(CanvasError):
+            save_settings({"url": "https://canvas.example", "token": "replacement"})
+        self.assertEqual(json.loads(self.path.read_text())["token"], "original")
+
+    def test_keep_token_only_for_same_site(self):
+        save_settings({"url": "https://canvas.example", "token": "original"})
+        save_settings({"url": "https://canvas.example/", "token": ""})
+        self.assertEqual(json.loads(self.path.read_text())["token"], "original")
+        self.get.reset_mock()
+        with self.assertRaises(CanvasError):
+            save_settings({"url": "https://other.example", "token": ""})
+        self.get.assert_not_called()
+
+    def test_replace_token_atomically(self):
+        save_settings({"url": "https://canvas.example", "token": "original"})
+        save_settings({"url": "https://canvas.example", "token": "replacement"})
+        self.assertEqual(json.loads(self.path.read_text())["token"], "replacement")
+        self.assertEqual(list(self.path.parent.iterdir()), [self.path])
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+
+    def test_invalid_input_never_contacts_canvas(self):
+        for data in [{"url": "http://canvas.example", "token": "secret"},
+                     {"url": "https://canvas.example", "token": ""},
+                     {"url": "https://canvas.example", "token": "invalid\ntoken"}]:
+            with self.assertRaises(CanvasError):
+                save_settings(data)
+        self.get.assert_not_called()
+        self.assertFalse(self.path.exists())
+
+    def test_insecure_file_is_not_exposed(self):
+        save_settings({"url": "https://canvas.example", "token": "secret"})
+        os.chmod(self.path, 0o644)
+        with self.assertRaises(CanvasError):
+            settings_info()
 
 
 if __name__ == "__main__":
