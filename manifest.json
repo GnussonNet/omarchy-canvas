@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "canvas.assignments",
   "name": "Omarchy Canvas",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Filip Magnusson",
   "license": "MIT",
   "description": "Read-only Canvas assignments due in the next seven days, with submission status and browser links.",

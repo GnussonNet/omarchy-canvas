@@ -11,7 +11,11 @@ Ui.Panel {
     property var anchorItem: null
     property var hostWidget: null
     property bool editingSettings: false
-    readonly property bool showSettings: editingSettings || (hostWidget ? hostWidget.needsSetup : false)
+    readonly property bool showSettings: editingSettings
+    function openSettings() {
+        editingSettings = true
+        if (hostWidget) hostWidget.cancelRefresh()
+    }
     onOpenedChanged: {
         if (!opened && settingsLoader.item) {
             settingsLoader.item.clearSecret()
@@ -43,12 +47,26 @@ Ui.Panel {
                 visible: !root.showSettings
                 width: parent.width
                 spacing: Style.space(8)
-                Text {
-                    text: "Canvas · Next 7 days"
-                    color: root.barForeground
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.subtitle
-                    font.bold: true
+                Row {
+                    width: parent.width
+                    Text {
+                        width: parent.width - settingsButton.width
+                        height: settingsButton.height
+                        verticalAlignment: Text.AlignVCenter
+                        text: "Canvas · Next 7 days"
+                        color: root.barForeground
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.subtitle
+                        font.bold: true
+                    }
+                    ToolButton {
+                        id: settingsButton
+                        text: "⚙"
+                        Accessible.name: "Canvas settings"
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Settings"
+                        onClicked: root.openSettings()
+                    }
                 }
                 Text {
                     width: parent.width
@@ -67,15 +85,15 @@ Ui.Panel {
                     color: root.barForeground
                     font.pixelSize: Style.font.bodySmall
                 }
-                Ui.WidgetButton {
-                    bar: root.bar
+                Button {
                     text: "Refresh"
-                    onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton && root.hostWidget) root.hostWidget.refresh() }
+                    enabled: root.hostWidget && !root.hostWidget.busy && !root.hostWidget.needsSetup
+                    onClicked: root.hostWidget.refresh()
                 }
-                Ui.WidgetButton {
-                    bar: root.bar
-                    text: "Settings"
-                    onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton) root.editingSettings = true }
+                Button {
+                    visible: root.hostWidget && root.hostWidget.needsSetup
+                    text: "Connect Canvas and choose courses"
+                    onClicked: root.openSettings()
                 }
             }
             ListView {
@@ -135,7 +153,8 @@ Ui.Panel {
                 Text {
                     width: parent.width
                     visible: list.count === 0 && root.hostWidget && !root.hostWidget.busy && !root.hostWidget.error
-                    text: root.hostWidget && root.hostWidget.warnings.length ? "Some courses could not be checked." : "No assignments due in the next 7 days."
+                    text: root.hostWidget && root.hostWidget.warnings.length ? "Some courses could not be checked." :
+                        root.hostWidget && root.hostWidget.selectedCourseCount === 0 ? "No courses selected. Choose courses in Settings." : "No assignments due in the next 7 days."
                     wrapMode: Text.Wrap
                     color: root.barForeground
                 }
@@ -149,13 +168,20 @@ Ui.Panel {
                     foreground: root.barForeground
                     onboarding: root.hostWidget ? root.hostWidget.needsSetup : false
                     readerBusy: root.hostWidget ? root.hostWidget.busy : false
+                    onConnectedAccount: {
+                        if (!root.hostWidget) return
+                        root.hostWidget.needsSetup = true
+                        root.hostWidget.assignments = []
+                        root.hostWidget.warnings = []
+                        root.hostWidget.updatedAt = ""
+                        root.hostWidget.error = "Choose courses in Settings to finish connecting."
+                    }
                     onSaved: {
                         root.editingSettings = false
                         if (root.hostWidget) root.hostWidget.settingsSaved()
                     }
                     onCancelled: {
-                        if (onboarding) root.close()
-                        else root.editingSettings = false
+                        root.editingSettings = false
                     }
                 }
             }

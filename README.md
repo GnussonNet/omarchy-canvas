@@ -2,7 +2,7 @@
 
 A read-only Canvas widget for the right side of the Omarchy Quattro bar.
 Click **Canvas** to see assignments due from now through the next 7 × 24 hours,
-sorted by deadline, across your active student enrollments. Submitted assignments
+sorted by deadline, from the courses you choose. Submitted assignments
 stay visible. Each row opens the assignment in your default browser.
 
 ## Requirements
@@ -26,44 +26,54 @@ The plugin ID is `canvas.assignments`; `omarchy.*` IDs are reserved for built-in
 The manifest defaults to the right section of your existing bar. A top bar places
 it at the top right. This plugin does not move the bar itself.
 
-Click **Canvas Setup** in the bar to open the first-run onboarding. Enter your
-Canvas site root and access token, then click **Connect Canvas**. The plugin
-checks the connection with a read-only request before saving and loading your
-assignments. You can dismiss onboarding with **Set up later**.
+Setup happens entirely in the plugin—no terminal credential command is needed.
+
+1. Click **Canvas** in the bar, then the **⚙ settings icon** at the top right.
+2. Enter your Canvas site URL and access token, then click **Connect**.
+3. Once connected, the settings page lists all your active student courses.
+4. Check the courses you want, then click **Save courses and show assignments**.
+
+The panel has two pages: assignments and settings. Use the gear to revisit
+settings and **Back to assignments** to return without saving course changes.
+Connecting saves validated credentials and the course list; assignment fetching
+begins only after you save your course selection. Existing configurations also
+need this course-selection step after updating.
 
 Create a token in Canvas under **Account → Settings → Approved Integrations →
 New Access Token**, if your institution allows it. The token field is masked.
 Never put a token in a Git repository, shell command, screenshot, or issue.
 
-Open **Canvas → Settings** later to update the connection. Leave the token blank
+Open **Canvas → ⚙** later to update the connection. Leave the token blank
 to keep the saved token for the same site; changing the site requires a token.
-**Test connection and save** replaces credentials only after the check succeeds.
-Cancel discards unsaved edits. Saving checks course access; assignment-access
-errors are reported separately when assignments load.
+**Connect** replaces credentials only after the course list loads successfully.
+It refreshes the course list and asks you to confirm your selection. Course
+choices are preserved when reconnecting with the same URL and token. A new token
+or site resets the selection. Assignment-access errors appear separately when
+assignments load.
 
 Setup writes `$XDG_CONFIG_HOME/omarchy-canvas/config.json` (normally
 `~/.config/omarchy-canvas/config.json`) with mode `0600`, outside the plugin
 repository. Settings updates replace this file atomically with the same private
 permissions. Like a `.env` file, it is plain text, not encrypted: other programs
 running as your user can read it. The graphical form does not change that storage
-model. Its shape is:
+model. The file also stores course IDs, course names, and your selection.
 
-```json
-{"url": "https://school.instructure.com", "token": "YOUR_PRIVATE_TOKEN"}
-```
-
-Optional terminal setup is still available for a new configuration:
+## Update
 
 ```sh
-python3 ~/.config/omarchy/plugins/canvas.assignments/canvas.py --configure
+omarchy plugin update canvas.assignments
 ```
 
-The terminal command refuses to overwrite existing credentials; use Settings
-to update them.
+Then open **⚙**, connect, and choose your courses.
 
 ## Behavior
 
-- Refreshes every five minutes, when opened, and with the Refresh button.
+- Refreshes on startup, after saving course choices, every five minutes, and with
+  the Refresh button. Opening the panel displays current results immediately.
+- Regular refreshes fetch assignments only for selected courses; they do not
+  reload the course list or visit unselected courses. Selecting no courses pauses
+  assignment fetching. Opening Settings cancels an ongoing refresh.
+- Requests time out after 20 seconds each, with a 60-second overall limit.
 - Shows your personalized due dates in the desktop's local timezone.
 - Includes submitted work; excludes overdue work, undated assignments,
   unpublished/hidden assignments, and courses without an active student enrollment.
@@ -118,7 +128,7 @@ omarchy-shell shell hide canvas.assignments
 qs log -p /usr/share/omarchy/shell --tail 100
 ```
 
-Also check onboarding, settings updates, failed connection checks, text-field
+Also check the settings gear, connecting, course selection, failed connection checks, text-field
 keyboard input, scrolling, browser links, Escape, disable/re-enable and shell restart.
 Tests use synthetic responses and never contact Canvas.
 

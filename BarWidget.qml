@@ -10,6 +10,8 @@ Ui.BarWidget {
     property string error: ""
     property string updatedAt: ""
     property bool needsSetup: false
+    property int selectedCourseCount: 0
+    property bool refreshCancelled: false
     readonly property bool busy: fetcher.running
     readonly property bool opened: panelLoader.item ? panelLoader.item.opened : false
     readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing : false
@@ -17,7 +19,14 @@ Ui.BarWidget {
     implicitHeight: button.implicitHeight
 
     function refresh() {
-        if (!fetcher.running && !(panelLoader.item && panelLoader.item.showSettings)) fetcher.running = true
+        if (!fetcher.running && !(panelLoader.item && panelLoader.item.showSettings)) {
+            refreshCancelled = false
+            fetcher.running = true
+        }
+    }
+    function cancelRefresh() {
+        refreshCancelled = true
+        fetcher.running = false
     }
     function settingsSaved() {
         needsSetup = false
@@ -27,7 +36,7 @@ Ui.BarWidget {
         error = ""
         Qt.callLater(refresh)
     }
-    function open() { if (panelLoader.item) { refresh(); panelLoader.item.open() } }
+    function open() { if (panelLoader.item) panelLoader.item.open() }
     function close() { if (panelLoader.item) panelLoader.item.close() }
     function toggle() { if (opened) close(); else open() }
     function closeForPopoutSwitch() { if (panelLoader.item) panelLoader.item.closeForPopoutSwitch() }
@@ -46,6 +55,7 @@ Ui.BarWidget {
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
+                if (root.refreshCancelled) return
                 try {
                     var result = JSON.parse(text)
                     if (result.ok) {
@@ -53,6 +63,7 @@ Ui.BarWidget {
                         root.assignments = result.assignments
                         root.warnings = result.warnings
                         root.updatedAt = result.updated_at
+                        root.selectedCourseCount = result.selected_course_count || 0
                         root.error = ""
                     } else {
                         root.needsSetup = result.needs_setup === true
@@ -62,7 +73,7 @@ Ui.BarWidget {
             }
         }
         onExited: function(exitCode) {
-            if (exitCode !== 0) root.error = "Canvas reader failed. Check Python 3 is installed."
+            if (exitCode !== 0 && !root.refreshCancelled) root.error = "Canvas reader failed. Check Python 3 is installed."
         }
     }
     Loader {

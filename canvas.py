@@ -98,11 +98,10 @@ def submission_status(assignment):
     return "Not submitted"
 
 
-def collect(client, now=None):
+def collect(client, courses, now=None):
     now = now or datetime.now(timezone.utc)
     end = now + timedelta(days=7)
     rows, warnings = [], []
-    courses = client.pages("/api/v1/courses", {"enrollment_type": "student", "enrollment_state": "active", "per_page": 100})
     for course in courses:
         cid = str(course["id"])
         if not cid.isdecimal():
@@ -167,30 +166,81 @@ def settings_info():
     except FileNotFoundError:
         return {"ok": True, "configured": False, "url": ""}
     # The saved token is never sent back to the UI.
-    return {"ok": True, "configured": True, "url": config["url"]}
+    return public_settings(config)
+
+
+def public_settings(config):
+    return {"ok": True, "configured": True, "url": config["url"],
+            "courses": config.get("courses", []),
+            "courses_loaded": "courses" in config,
+            "selected_course_ids": config.get("selected_course_ids", []),
+            "selection_saved": config.get("selection_saved", False)}
 
 
 def save_settings(data):
     base = origin(data["url"].strip())
     token = data.get("token", "").strip()
+    try:
+        existing = read_config()
+    except (FileNotFoundError, CanvasError, ValueError, KeyError):
+        existing = None
     if not token:
-        try:
-            existing = read_config()
-        except FileNotFoundError:
-            raise CanvasError("Enter your Canvas access token.") from None
+        if existing is None:
+            raise CanvasError("Enter your Canvas access token.")
         if existing["url"] != base:
             raise CanvasError("Enter a new token when changing the Canvas site.")
         token = existing["token"]
     validate_token(token)
     # Verify access before replacing working credentials. GET only, no Canvas writes.
     client = Client(base, token)
-    client.get(base + "/api/v1/courses?enrollment_type=student&per_page=1")
+    courses = []
+    for course in client.pages("/api/v1/courses", {"enrollment_type": "student", "enrollment_state": "active", "per_page": 100}):
+        cid = str(course["id"])
+        if not cid.isdecimal():
+            raise CanvasError("Canvas returned an invalid course ID.")
+        courses.append({"id": cid, "name": course.get("name", "Course " + cid)})
+    courses.sort(key=lambda course: course["name"].casefold())
+    same_account = existing and existing["url"] == base and existing["token"] == token
+    selected = existing.get("selected_course_ids", []) if same_account else []
+    config = {"url": base, "token": token, "courses": courses,
+              "selected_course_ids": [c["id"] for c in courses if c["id"] in selected],
+              "selection_saved": False}
+    write_config(config)
+    return public_settings(config)
+
+
+def select_courses(data):
+    config = read_config()
+    if data.get("url") != config["url"]:
+        raise CanvasError("Connection changed. Reopen Settings and try again.")
+    selected = data.get("selected_course_ids")
+    allowed = {course["id"] for course in config.get("courses", [])}
+    if not isinstance(selected, list) or any(not isinstance(cid, str) or cid not in allowed for cid in selected):
+        raise CanvasError("Choose courses from the connected account.")
+    config["selected_course_ids"] = list(dict.fromkeys(selected))
+    config["selection_saved"] = True
+    write_config(config)
+    return public_settings(config)
+
+
+def read_assignments():
+    config = read_config()
+    if not config.get("selection_saved", False):
+        return {"ok": False, "needs_setup": True, "error": "Open Settings, connect, and choose the courses to follow."}
+    selected = set(config.get("selected_course_ids", []))
+    courses = [course for course in config.get("courses", []) if course["id"] in selected]
+    result = collect(Client(config["url"], config["token"]), courses)
+    result["selected_course_count"] = len(courses)
+    return result
+
+
+def write_config(config):
     path = config_path()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=".config-", dir=path.parent)
     try:
         with os.fdopen(fd, "w") as out:
-            json.dump({"url": base, "token": token}, out)
+            json.dump(config, out)
             out.write("\n")
             out.flush()
             os.fsync(out.fileno())
@@ -198,11 +248,14 @@ def save_settings(data):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
-    return {"ok": True, "configured": True, "url": base}
+
+
+class RefreshTimeout(Exception):
+    pass
 
 
 def refresh_timeout(*_):
-    raise CanvasError("Canvas refresh timed out.")
+    raise RefreshTimeout("Canvas request timed out. Try fewer courses or check your connection.")
 
 
 def main():
@@ -211,27 +264,29 @@ def main():
     modes.add_argument("--configure", action="store_true", help="save credentials locally using a hidden token prompt")
     modes.add_argument("--settings-info", action="store_true", help="return configuration status without the token")
     modes.add_argument("--save-settings", action="store_true", help="validate and save settings supplied as JSON on stdin")
+    modes.add_argument("--select-courses", action="store_true", help="save selected courses from JSON on stdin")
     args = parser.parse_args()
     try:
         if args.configure:
             configure()
             return
         signal.signal(signal.SIGALRM, refresh_timeout)
-        signal.alarm(120)
+        signal.alarm(60)
         if args.settings_info:
             result = settings_info()
         elif args.save_settings:
             result = save_settings(json.loads(sys.stdin.readline(16384)))
+        elif args.select_courses:
+            result = select_courses(json.loads(sys.stdin.readline(16384)))
         else:
-            config = read_config()
-            result = collect(Client(config["url"], config["token"]))
+            result = read_assignments()
         print(json.dumps(result))
     except FileNotFoundError:
         print(json.dumps({"ok": False, "needs_setup": True, "error": "Connect your Canvas account to get started."}))
     except FileExistsError:
         print("Configuration already exists; edit it locally to change credentials.", file=sys.stderr)
         sys.exit(1)
-    except CanvasError as e:
+    except (CanvasError, RefreshTimeout) as e:
         print(json.dumps({"ok": False, "error": str(e)}))
     except (ValueError, KeyError, TypeError, OSError):
         print(json.dumps({"ok": False, "error": "Could not read Canvas data or configuration. Check the configuration and retry."}))

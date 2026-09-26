@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
-from canvas import CanvasError, Client, NoRedirect, collect, origin, submission_status, save_settings, settings_info
+from canvas import CanvasError, Client, NoRedirect, collect, origin, submission_status, save_settings, settings_info, select_courses, read_assignments
 
 
 class ReaderTests(unittest.TestCase):
@@ -70,16 +70,16 @@ class ReaderTests(unittest.TestCase):
                   assignment(3, timedelta()), assignment(4, timedelta(days=7, seconds=1)),
                   {"id": 5, "name": "Undated", "due_at": None}]
         client = Mock(base="https://canvas.example")
-        client.pages.side_effect = [[{"id": "1", "name": "Math"}], source]
-        result = collect(client, now)
+        client.pages.side_effect = [source]
+        result = collect(client, [{"id": "1", "name": "Math"}], now)
         self.assertEqual([r["id"] for r in result["assignments"]], ["1:3", "1:1"])
         self.assertTrue(all(r["status"] == "Submitted" for r in result["assignments"]))
         self.assertEqual(result["assignments"][0]["url"], "https://canvas.example/courses/1/assignments/3")
 
     def test_partial_failure_warns(self):
         client = Mock(base="https://canvas.example")
-        client.pages.side_effect = [[{"id": "1", "name": "Math"}, {"id": "2", "name": "Art"}], CanvasError("Access denied"), []]
-        result = collect(client)
+        client.pages.side_effect = [CanvasError("Access denied"), []]
+        result = collect(client, [{"id": "1", "name": "Math"}, {"id": "2", "name": "Art"}])
         self.assertEqual(result["warnings"], ["Math: Access denied"])
 
 
@@ -101,8 +101,8 @@ class SettingsTests(unittest.TestCase):
         self.assertNotIn("private-token", json.dumps(result))
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.path.parent.stat().st_mode & 0o777, 0o700)
-        self.get.assert_called_once_with("https://canvas.example/api/v1/courses?enrollment_type=student&per_page=1")
-        self.assertEqual(settings_info(), {"ok": True, "configured": True, "url": "https://canvas.example"})
+        self.get.assert_called_once_with("https://canvas.example/api/v1/courses?enrollment_type=student&enrollment_state=active&per_page=100")
+        self.assertEqual(settings_info(), {"ok": True, "configured": True, "url": "https://canvas.example", "courses": [], "courses_loaded": True, "selected_course_ids": [], "selection_saved": False})
 
     def test_failed_connection_preserves_credentials(self):
         save_settings({"url": "https://canvas.example", "token": "original"})
@@ -141,6 +141,54 @@ class SettingsTests(unittest.TestCase):
         os.chmod(self.path, 0o644)
         with self.assertRaises(CanvasError):
             settings_info()
+
+    def connect_courses(self):
+        self.get.return_value = ([{"id": "1", "name": "Math"}, {"id": "2", "name": "Art"}], None)
+        return save_settings({"url": "https://canvas.example", "token": "secret"})
+
+    def test_connect_returns_courses_without_fetching_assignments(self):
+        result = self.connect_courses()
+        self.assertEqual([c["name"] for c in result["courses"]], ["Art", "Math"])
+        self.assertEqual(result["selected_course_ids"], [])
+        self.assertEqual(self.get.call_count, 1)
+        self.assertNotIn("secret", json.dumps(result))
+
+    def test_refresh_only_fetches_selected_courses(self):
+        self.connect_courses()
+        select_courses({"url": "https://canvas.example", "selected_course_ids": ["2"]})
+        self.get.reset_mock()
+        self.get.return_value = ([], None)
+        result = read_assignments()
+        self.assertEqual(result["selected_course_count"], 1)
+        self.assertEqual(self.get.call_count, 1)
+        self.assertIn("/courses/2/assignments?", self.get.call_args.args[0])
+
+    def test_no_selection_does_not_fetch(self):
+        self.connect_courses()
+        self.get.reset_mock()
+        self.assertTrue(read_assignments()["needs_setup"])
+        select_courses({"url": "https://canvas.example", "selected_course_ids": []})
+        self.assertEqual(read_assignments()["assignments"], [])
+        self.get.assert_not_called()
+
+    def test_unknown_course_cannot_be_saved(self):
+        self.connect_courses()
+        with self.assertRaises(CanvasError):
+            select_courses({"url": "https://canvas.example", "selected_course_ids": ["999"]})
+
+    def test_account_change_resets_selection(self):
+        self.connect_courses()
+        select_courses({"url": "https://canvas.example", "selected_course_ids": ["1"]})
+        result = save_settings({"url": "https://canvas.example", "token": "different-account-token"})
+        self.assertEqual(result["selected_course_ids"], [])
+        self.assertFalse(result["selection_saved"])
+
+    def test_existing_config_requires_course_selection_without_network(self):
+        self.path.parent.mkdir()
+        self.path.write_text(json.dumps({"url": "https://canvas.example", "token": "secret"}))
+        os.chmod(self.path, 0o600)
+        self.assertTrue(read_assignments()["needs_setup"])
+        self.get.assert_not_called()
 
 
 if __name__ == "__main__":
