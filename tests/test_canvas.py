@@ -3,6 +3,7 @@ import json
 import unittest
 import os
 import tempfile
+import time
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
@@ -11,6 +12,13 @@ from canvas import CanvasError, Client, NoRedirect, collect, origin, submission_
 
 
 class ReaderTests(unittest.TestCase):
+    def setUp(self):
+        environment = patch.dict(os.environ, {"TZ": "UTC"})
+        environment.start()
+        time.tzset()
+        self.addCleanup(time.tzset)
+        self.addCleanup(environment.stop)
+
     def test_only_read_routes_and_safe_parameters(self):
         client = Client("https://canvas.example", "secret")
         response = io.StringIO("[]")
@@ -67,12 +75,13 @@ class ReaderTests(unittest.TestCase):
         def assignment(aid, delta):
             return {"id": aid, "name": "Assignment", "due_at": (now + delta).isoformat(), "submission": {"workflow_state": "submitted"}}
         source = [assignment(1, timedelta(days=7)), assignment(2, timedelta(seconds=-1)),
-                  assignment(3, timedelta()), assignment(4, timedelta(days=7, seconds=1)),
+                  assignment(3, timedelta()), assignment(4, timedelta(days=7, hours=12)),
+                  assignment(6, timedelta(days=7, hours=11, minutes=59, seconds=59)),
                   {"id": 5, "name": "Undated", "due_at": None}]
         client = Mock(base="https://canvas.example")
         client.pages.side_effect = [source]
         result = collect(client, [{"id": "1", "name": "Math"}], now)
-        self.assertEqual([r["id"] for r in result["assignments"]], ["1:3", "1:1"])
+        self.assertEqual([r["id"] for r in result["assignments"]], ["1:3", "1:1", "1:6"])
         self.assertTrue(all(r["status"] == "Submitted" for r in result["assignments"]))
         self.assertEqual(result["assignments"][0]["url"], "https://canvas.example/courses/1/assignments/3")
 
@@ -99,6 +108,26 @@ class ReaderTests(unittest.TestCase):
         for value in [0, -1, 91, True, 1.5, "7", None]:
             with self.subTest(value=value), self.assertRaises(CanvasError):
                 validate_days(value)
+
+    def test_window_ends_at_local_midnight_across_dst_change(self):
+        with patch.dict(os.environ, {"TZ": "Europe/Stockholm"}):
+            time.tzset()
+            try:
+                # Local Thursday Oct 22 at 00:30 is still Wednesday in UTC.
+                # Sweden leaves daylight-saving time before the final Thursday.
+                now = datetime(2026, 10, 21, 22, 30, tzinfo=timezone.utc)
+                source = [{"id": str(i), "name": "Task", "due_at": due}
+                          for i, due in enumerate([
+                              "2026-10-29T23:59:59.999999+01:00",
+                              "2026-10-30T00:00:00+01:00",
+                              "2026-10-30T00:00:01+01:00",
+                          ], start=1)]
+                client = Mock(base="https://canvas.example")
+                client.pages.return_value = source
+                result = collect(client, [{"id": "1", "name": "Math"}], now)
+                self.assertEqual([r["id"] for r in result["assignments"]], ["1:1"])
+            finally:
+                time.tzset()
 
     def test_blank_parameters_are_rejected_before_network(self):
         client = Client("https://canvas.example", "secret")

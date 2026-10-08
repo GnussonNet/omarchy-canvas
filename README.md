@@ -1,7 +1,8 @@
 # Omarchy Canvas
 
 A read-only Canvas widget for the right side of the Omarchy Quattro bar.
-Click **Assignments** to see assignments due from now through the next 7 × 24 hours by default,
+Click **Assignments** to see assignments due from now through the end of the day
+7 calendar days ahead by default (Thursday includes all of next Thursday),
 sorted by deadline, from the courses you choose. Submitted assignments
 stay visible. Each row opens the assignment in your default browser.
 The bar counter includes only **Not submitted** assignments; submitted titles
@@ -92,6 +93,9 @@ This briefly restarts the bar and shell UI; it does not remove Canvas credential
   assignment fetching. Opening Settings cancels an ongoing refresh.
 - Requests time out after 20 seconds each, with a 60-second overall limit.
 - Shows your personalized due dates in the desktop's local timezone.
+- The deadline window ends at local midnight after the final day, including
+  daylight-saving changes. Deadlines exactly at that midnight belong to the
+  following day and are excluded.
 - Includes submitted work; excludes overdue work, undated assignments,
   unpublished/hidden assignments, and courses without an active student enrollment.
 - Labels: Submitted, Not submitted, Graded, Excused, Resubmission requested,

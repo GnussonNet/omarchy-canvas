@@ -2,11 +2,14 @@
 
 Validated on the development machine, 2026-10-08:
 
-- `python3 -m unittest discover -s tests -v`: 35 tests passed. Coverage includes
+- `python3 -m unittest discover -s tests -v`: 36 tests passed. Coverage includes
   private credential storage and atomic replacement, failed connection checks,
   selected-course fetching, date windows, total and partial refresh failures,
   interrupted pagination, malformed API responses and configuration, blank
   disallowed parameters, route changes and pagination loops, and large selections.
+  The deadline window includes the entire final local calendar day; regression
+  coverage checks the exclusive midnight boundary and a Stockholm daylight-saving
+  change where the current local date differs from UTC.
   Tests use synthetic responses and never contact Canvas.
 - `omarchy plugin validate .`: passed.
 - Qt 6 `qmllint` on every QML file: exited successfully using a temporary import

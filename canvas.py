@@ -132,7 +132,10 @@ def record_name(record, fallback):
 
 def collect(client, courses, now=None, days_ahead=7):
     now = now or datetime.now(timezone.utc)
-    end = now + timedelta(days=validate_days(days_ahead))
+    # Use local midnight after the final calendar day. Convert that midnight
+    # separately so daylight-saving changes use the offset on the target date.
+    final_day = now.astimezone().date() + timedelta(days=validate_days(days_ahead))
+    end = datetime.combine(final_day + timedelta(days=1), datetime.min.time()).astimezone(timezone.utc)
     rows, warnings = [], []
     successful_courses = 0
     for course in courses:
@@ -151,7 +154,7 @@ def collect(client, courses, now=None, days_ahead=7):
                         raise ValueError
                 except (AttributeError, ValueError):
                     raise CanvasError("Canvas returned an invalid assignment deadline.") from None
-                if not now <= date <= end or assignment.get("published") is False:
+                if not now <= date < end or assignment.get("published") is False:
                     continue
                 sub = assignment.get("submission")
                 if sub is not None and not isinstance(sub, dict):
