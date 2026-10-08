@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import "CanvasStyle.js" as CanvasStyle
 
 Rectangle {
     id: root
@@ -11,13 +12,7 @@ Rectangle {
     readonly property bool actionable: assignment.status === "Not submitted" || assignment.status === "Resubmission requested"
     readonly property real hoursLeft: (new Date(assignment.due_at).getTime() - now.getTime()) / 3600000
     readonly property bool urgent: actionable && hoursLeft < 24
-    readonly property color courseColor: {
-        var colors = ["#7aa2f7", "#9ece6a", "#e0af68", "#bb9af7", "#7dcfff", "#f7768e"]
-        var key = String(assignment.id).split(":")[0]
-        var hash = 0
-        for (var i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0
-        return colors[hash % colors.length]
-    }
+    readonly property color courseColor: CanvasStyle.courseColor(String(assignment.id).split(":")[0])
     readonly property color statusColor: submitted ? "#9ece6a" : urgent || assignment.status === "Resubmission requested" ? Color.urgent : actionable ? Color.accent : foreground
     signal activated()
     implicitHeight: details.implicitHeight + Style.space(14)

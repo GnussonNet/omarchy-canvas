@@ -37,10 +37,12 @@ Setup happens entirely in the plugin—no terminal credential command is needed.
 2. Enter your Canvas site URL and access token, then click **Connect**.
 3. Once connected, the settings page lists all your active student courses.
 4. Choose **Days ahead** (1–90, default 7) and check the courses you want.
-5. Click **Save settings and show assignments**.
+5. Click **Save settings** at the bottom to return to assignments.
 
 The panel has two pages: assignments and settings. Use the gear to revisit
-settings and **Back to assignments** to return without saving course changes.
+settings and **Back** at the top to return without saving course changes.
+The connection form is collapsed once connected; use **Edit connection** to
+change the site or token. The course list scrolls while Back and Save remain visible.
 Connecting saves validated credentials and the course list; assignment fetching
 begins only after you save your course selection. Existing configurations also
 need this course-selection step after updating.
