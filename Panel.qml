@@ -13,11 +13,28 @@ Ui.Panel {
     property bool editingSettings: false
     readonly property bool showSettings: editingSettings
     readonly property int daysAhead: hostWidget ? hostWidget.daysAhead : 7
+    property date now: new Date()
+    readonly property var taskModel: {
+        var items = hostWidget ? hostWidget.assignments : []
+        return items.map(function(item) {
+            return Object.assign({}, item, { dueDay: Qt.formatDateTime(new Date(item.due_at), "yyyy-MM-dd") })
+        })
+    }
+    function dayLabel(day) {
+        var date = new Date(day + "T12:00:00")
+        var tomorrow = new Date(now)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        var prefix = day === Qt.formatDateTime(now, "yyyy-MM-dd") ? "Today" :
+            day === Qt.formatDateTime(tomorrow, "yyyy-MM-dd") ? "Tomorrow" : Qt.formatDateTime(date, "dddd")
+        return prefix + "  " + Qt.formatDateTime(date, "d MMM")
+    }
+    Timer { interval: 60000; running: root.opened; repeat: true; onTriggered: root.now = new Date() }
     function openSettings() {
         editingSettings = true
         if (hostWidget) hostWidget.cancelRefresh()
     }
     onOpenedChanged: {
+        root.now = new Date()
         if (!opened && settingsLoader.item) {
             settingsLoader.item.clearSecret()
             if (!settingsLoader.item.saving) editingSettings = false
@@ -36,13 +53,22 @@ Ui.Panel {
         open: root.opened
         padding: Style.space(10)
         focusTarget: root.showSettings ? (settingsLoader.item as Item) : keyCatcher
-        contentWidth: panel.fittedContentWidth(Style.space(430))
+        contentWidth: panel.fittedContentWidth(Style.space(460))
         contentHeight: panel.fittedContentHeight(Style.space(500))
         Ui.PanelKeyCatcher {
             id: keyCatcher
             anchors.fill: parent
             blocked: root.showSettings
             onCloseRequested: root.close()
+            onMoveRequested: function(dx, dy) {
+                if (!dy || list.count === 0) return
+                list.currentIndex = Math.max(0, Math.min(list.count - 1, list.currentIndex + dy))
+                list.positionViewAtIndex(list.currentIndex, ListView.Contain)
+            }
+            onActivateRequested: {
+                if (list.currentItem) Qt.openUrlExternally(list.currentItem.assignment.url)
+            }
+            onTextKey: function(text) { if (text === "r" && root.hostWidget) root.hostWidget.refresh() }
             onTabRequested: function(direction) { root.switchPanel(direction) }
             Column {
                 id: header
@@ -52,14 +78,24 @@ Ui.Panel {
                 Row {
                     width: parent.width
                     Text {
-                        width: parent.width - settingsButton.width
+                        width: parent.width - settingsButton.width - refreshButton.width
                         height: settingsButton.height
                         verticalAlignment: Text.AlignVCenter
-                        text: "Canvas · Next " + root.daysAhead + (root.daysAhead === 1 ? " day" : " days")
+                        text: "󰑭  Assignments"
                         color: root.barForeground
                         font.family: Style.font.family
                         font.pixelSize: Style.font.subtitle
                         font.bold: true
+                    }
+                    Ui.PanelActionButton {
+                        id: refreshButton
+                        iconText: "󰑐"
+                        foreground: root.barForeground
+                        focusable: true
+                        enabled: root.hostWidget && !root.hostWidget.busy && !root.hostWidget.needsSetup
+                        Accessible.name: "Refresh assignments"
+                        tooltipText: "Refresh (R)"
+                        onClicked: root.hostWidget.refresh()
                     }
                     Ui.PanelActionButton {
                         id: settingsButton
@@ -72,12 +108,29 @@ Ui.Panel {
                         onClicked: root.openSettings()
                     }
                 }
+                Row {
+                    spacing: Style.space(8)
+                    CanvasBadge {
+                        id: pendingBadge
+                        text: (root.hostWidget ? root.hostWidget.notSubmittedCount : 0) + " not submitted"
+                        foreground: Color.accent
+                    }
+                    Text {
+                        height: pendingBadge.height
+                        verticalAlignment: Text.AlignVCenter
+                        text: "Next " + root.daysAhead + (root.daysAhead === 1 ? " day" : " days")
+                        color: root.barForeground
+                        opacity: 0.65
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.bodySmall
+                    }
+                }
                 Text {
                     width: parent.width
                     textFormat: Text.PlainText
                     text: root.hostWidget ? (root.hostWidget.error || root.hostWidget.warnings.join("\n")) : ""
                     visible: text.length > 0
-                    color: root.barForeground
+                    color: Color.urgent
                     wrapMode: Text.Wrap
                     font.pixelSize: Style.font.bodySmall
                 }
@@ -87,13 +140,8 @@ Ui.Panel {
                         root.hostWidget.updatedAt ? (root.hostWidget.error ? "Last successful refresh: " : "Updated: ") +
                         Qt.formatDateTime(new Date(root.hostWidget.updatedAt), "ddd d MMM HH:mm") : "Not connected"
                     color: root.barForeground
+                    opacity: 0.6
                     font.pixelSize: Style.font.bodySmall
-                }
-                CanvasButton {
-                    foreground: root.barForeground
-                    text: "Refresh"
-                    enabled: root.hostWidget && !root.hostWidget.busy && !root.hostWidget.needsSetup
-                    onClicked: root.hostWidget.refresh()
                 }
                 CanvasButton {
                     foreground: root.barForeground
@@ -108,7 +156,25 @@ Ui.Panel {
                 anchors { top: header.bottom; topMargin: Style.space(8); left: parent.left; right: parent.right; rightMargin: assignmentScrollBar.visible ? assignmentScrollBar.width + Style.space(6) : 0; bottom: parent.bottom }
                 clip: true
                 spacing: Style.space(4)
-                model: root.hostWidget ? root.hostWidget.assignments : []
+                model: root.taskModel
+                currentIndex: -1
+                boundsBehavior: Flickable.StopAtBounds
+                section.property: "dueDay"
+                section.criteria: ViewSection.FullString
+                section.delegate: Item {
+                    id: daySection
+                    required property string section
+                    width: list.width
+                    height: Style.space(34)
+                    Text {
+                        anchors { left: parent.left; bottom: parent.bottom; bottomMargin: Style.space(7) }
+                        text: root.dayLabel(daySection.section)
+                        color: root.barForeground
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.bodySmall
+                        font.bold: true
+                    }
+                }
                 ScrollBar.vertical: CanvasScrollBar {
                     id: assignmentScrollBar
                     parent: list.parent
@@ -116,52 +182,16 @@ Ui.Panel {
                     foreground: root.barForeground
                     anchors { left: list.right; leftMargin: Style.space(6); top: list.top; bottom: list.bottom }
                 }
-                delegate: Rectangle {
-                    id: row
+                delegate: CanvasTaskRow {
                     required property var modelData
+                    required property int index
                     width: list.width
-                    height: details.implicitHeight + Style.space(12)
-                    color: hit.containsMouse ? Qt.rgba(root.barForeground.r, root.barForeground.g, root.barForeground.b, 0.1) : "transparent"
-                    radius: Style.space(6)
-                    border.width: 1
-                    border.color: Qt.rgba(root.barForeground.r, root.barForeground.g, root.barForeground.b, 0.2)
-                    Column {
-                        id: details
-                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(6) }
-                        spacing: Style.space(2)
-                        Text {
-                            width: parent.width
-                            text: row.modelData.name
-                            textFormat: Text.PlainText
-                            wrapMode: Text.Wrap
-                            color: root.barForeground
-                            font.bold: true
-                            font.strikeout: row.modelData.status === "Submitted"
-                            font.pixelSize: Style.font.body
-                        }
-                        Text {
-                            width: parent.width
-                            text: row.modelData.course
-                            textFormat: Text.PlainText
-                            wrapMode: Text.Wrap
-                            color: root.barForeground
-                            font.pixelSize: Style.font.bodySmall
-                        }
-                        Text {
-                            width: parent.width
-                            text: Qt.formatDateTime(new Date(row.modelData.due_at), "ddd d MMM · HH:mm") + " · " + row.modelData.status
-                            wrapMode: Text.Wrap
-                            color: root.barForeground
-                            font.pixelSize: Style.font.bodySmall
-                        }
-                    }
-                    MouseArea {
-                        id: hit
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Qt.openUrlExternally(row.modelData.url)
-                    }
+                    height: implicitHeight
+                    assignment: modelData
+                    foreground: root.barForeground
+                    now: root.now
+                    selected: list.currentIndex === index
+                    onActivated: Qt.openUrlExternally(assignment.url)
                 }
                 Text {
                     width: parent.width

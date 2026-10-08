@@ -6,6 +6,9 @@ sorted by deadline, from the courses you choose. Submitted assignments
 stay visible. Each row opens the assignment in your default browser.
 The bar counter includes only **Not submitted** assignments; submitted titles
 are struck through in the list.
+The agenda groups tasks by due date, with course colors, status badges, and
+urgency badges for outstanding tasks due within 24 hours. Use Up/Down to select
+a task, Enter to open it, and R to refresh.
 
 ## Requirements
 

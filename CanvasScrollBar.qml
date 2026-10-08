@@ -11,7 +11,7 @@ ScrollBar {
     padding: 0
     contentItem: Rectangle {
         implicitWidth: Style.space(6)
-        radius: width / 2
+        radius: 0
         color: root.foreground
         opacity: root.pressed ? 0.8 : root.hovered ? 0.6 : 0.3
     }
