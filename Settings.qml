@@ -120,15 +120,17 @@ Item {
     Flickable {
         id: settingsScroll
         anchors.fill: parent
-        anchors.rightMargin: Style.space(18)
+        anchors.rightMargin: settingsScrollBar.visible ? settingsScrollBar.width + Style.space(6) : 0
         contentWidth: width
         contentHeight: settingsContent.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: CanvasScrollBar {
+            id: settingsScrollBar
             parent: root
+            visible: size < 1
             foreground: root.foreground
-            anchors { left: settingsScroll.right; leftMargin: Style.space(8); top: settingsScroll.top; bottom: settingsScroll.bottom }
+            anchors { left: settingsScroll.right; leftMargin: Style.space(6); top: settingsScroll.top; bottom: settingsScroll.bottom }
         }
         Column {
             id: settingsContent

@@ -34,6 +34,7 @@ Ui.Panel {
         owner: root.hostWidget || root
         bar: root.bar
         open: root.opened
+        padding: Style.space(10)
         focusTarget: root.showSettings ? (settingsLoader.item as Item) : keyCatcher
         contentWidth: panel.fittedContentWidth(Style.space(430))
         contentHeight: panel.fittedContentHeight(Style.space(500))
@@ -104,29 +105,30 @@ Ui.Panel {
             ListView {
                 id: list
                 visible: !root.showSettings
-                anchors { top: header.bottom; topMargin: Style.space(12); left: parent.left; right: parent.right; rightMargin: Style.space(18); bottom: parent.bottom }
+                anchors { top: header.bottom; topMargin: Style.space(8); left: parent.left; right: parent.right; rightMargin: assignmentScrollBar.visible ? assignmentScrollBar.width + Style.space(6) : 0; bottom: parent.bottom }
                 clip: true
-                spacing: Style.space(8)
+                spacing: Style.space(4)
                 model: root.hostWidget ? root.hostWidget.assignments : []
                 ScrollBar.vertical: CanvasScrollBar {
+                    id: assignmentScrollBar
                     parent: list.parent
                     visible: list.visible && size < 1
                     foreground: root.barForeground
-                    anchors { left: list.right; leftMargin: Style.space(8); top: list.top; bottom: list.bottom }
+                    anchors { left: list.right; leftMargin: Style.space(6); top: list.top; bottom: list.bottom }
                 }
                 delegate: Rectangle {
                     id: row
                     required property var modelData
                     width: list.width
-                    height: details.implicitHeight + Style.space(20)
+                    height: details.implicitHeight + Style.space(12)
                     color: hit.containsMouse ? Qt.rgba(root.barForeground.r, root.barForeground.g, root.barForeground.b, 0.1) : "transparent"
                     radius: Style.space(6)
                     border.width: 1
                     border.color: Qt.rgba(root.barForeground.r, root.barForeground.g, root.barForeground.b, 0.2)
                     Column {
                         id: details
-                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(10) }
-                        spacing: Style.space(4)
+                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(6) }
+                        spacing: Style.space(2)
                         Text {
                             width: parent.width
                             text: row.modelData.name
@@ -134,6 +136,7 @@ Ui.Panel {
                             wrapMode: Text.Wrap
                             color: root.barForeground
                             font.bold: true
+                            font.strikeout: row.modelData.status === "Submitted"
                             font.pixelSize: Style.font.body
                         }
                         Text {

@@ -6,6 +6,9 @@ Ui.BarWidget {
     id: root
     moduleName: "canvas.assignments"
     property var assignments: []
+    readonly property int notSubmittedCount: assignments.filter(function(assignment) {
+        return assignment.status === "Not submitted"
+    }).length
     property var warnings: []
     property string error: ""
     property string updatedAt: ""
@@ -89,8 +92,8 @@ Ui.BarWidget {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: "Assignments " + (root.needsSetup ? "Setup" : root.error ? "!" : root.assignments.length) + (root.warnings.length ? " !" : "")
-        tooltipText: "Assignments due in the next " + root.daysAhead + " days" + (root.busy ? " · Refreshing…" : "")
+        text: "Assignments " + (root.needsSetup ? "Setup" : root.error ? "!" : root.notSubmittedCount) + (root.warnings.length ? " !" : "")
+        tooltipText: "Not submitted assignments due in the next " + root.daysAhead + " days" + (root.busy ? " · Refreshing…" : "")
         onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton) root.toggle() }
     }
 }
