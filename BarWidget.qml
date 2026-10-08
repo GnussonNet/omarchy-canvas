@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell.Io
+import qs.Commons
 import qs.Ui as Ui
 
 Ui.BarWidget {
@@ -93,8 +94,37 @@ Ui.BarWidget {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: "󰥔 " + (root.needsSetup ? "Setup" : root.error ? "!" : root.notSubmittedCount) + (root.warnings.length ? " !" : "")
+        text: (root.needsSetup ? "Setup" : root.error ? "!" : root.notSubmittedCount) + (root.warnings.length ? " !" : "")
+        labelVisible: false
+        fixedWidth: vertical ? -1 : content.implicitWidth + scaledHorizontalMargin * 2
+        fixedHeight: vertical ? content.implicitHeight + scaledVerticalPadding * 2 : -1
         tooltipText: "Not submitted assignments due in the next " + root.daysAhead + " days" + (root.busy ? " · Refreshing…" : "")
         onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton) root.toggle() }
+        Grid {
+            id: content
+            anchors.centerIn: parent
+            columns: button.vertical ? 1 : 2
+            columnSpacing: Style.space(4)
+            horizontalItemAlignment: Grid.AlignHCenter
+            verticalItemAlignment: Grid.AlignVCenter
+            // Match BarIconButton's canvas and font metrics so the icon shares
+            // the built-in icons' baseline rather than the counter's line box.
+            Ui.OpticalGlyph {
+                width: Style.bar.iconCanvas
+                height: Style.bar.iconCanvas
+                text: "󰥔"
+                fontFamily: button.fontFamily
+                fontSize: Style.bar.iconFont
+                color: button.foreground
+            }
+            Text {
+                text: button.text
+                textFormat: Text.PlainText
+                font.family: button.fontFamily
+                font.pixelSize: button.fontSize
+                color: button.foreground
+                renderType: Text.NativeRendering
+            }
+        }
     }
 }
