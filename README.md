@@ -52,10 +52,10 @@ omarchy plugin add https://github.com/GnussonNet/omarchy-canvas.git --enable
 The widget defaults to the right section of your existing bar. To place it there explicitly:
 
 ```sh
-omarchy bar move canvas.assignments --section right
+omarchy bar move gnussonnet.omarchy-canvas --section right
 ```
 
-The plugin ID is `canvas.assignments`. On a top bar, the right section is at the top right; installing the plugin does not change the bar's position.
+The plugin ID is `gnussonnet.omarchy-canvas`. On a top bar, the right section is at the top right; installing the plugin does not change the bar's position.
 
 ## First-time setup
 
@@ -202,7 +202,7 @@ Do not include your token in commits, screenshots, shell commands, or issue repo
 ### Update
 
 ```sh
-omarchy plugin update canvas.assignments
+omarchy plugin update gnussonnet.omarchy-canvas
 ```
 
 If the plugin asks you to complete setup after updating, open Settings, connect if needed, choose courses, and click **Save settings**. Older configurations without a confirmed course selection require this step.
@@ -218,7 +218,7 @@ This briefly restarts the bar and shell UI. It does not delete Canvas credential
 ### Remove
 
 ```sh
-omarchy plugin remove canvas.assignments
+omarchy plugin remove gnussonnet.omarchy-canvas
 ```
 
 Removal leaves the private configuration file intact. To remove account data too, delete `$XDG_CONFIG_HOME/omarchy-canvas/config.json` (normally `~/.config/omarchy-canvas/config.json`) and revoke the access token in Canvas if you no longer need it.
@@ -292,8 +292,8 @@ Use `qmllint` directly if it is on your PATH. Quickshell's `qs.*` imports need a
 With the plugin installed, open and hide it through shell IPC:
 
 ```sh
-omarchy-shell shell summon canvas.assignments '{}'
-omarchy-shell shell hide canvas.assignments
+omarchy-shell shell summon gnussonnet.omarchy-canvas '{}'
+omarchy-shell shell hide gnussonnet.omarchy-canvas
 ```
 
 Interactive checks should cover connection success/failure, text entry, selecting and saving courses, scrolling, browser links, keyboard navigation, outside-click dismissal, closing during helper operations, and plugin lifecycle. Mocked tests and screenshots do not verify a live Canvas account or the complete desktop flow; see [VALIDATION.md](VALIDATION.md).

@@ -5,7 +5,7 @@ import qs.Ui as Ui
 
 Ui.BarWidget {
     id: root
-    moduleName: "canvas.assignments"
+    moduleName: "gnussonnet.omarchy-canvas"
     property var assignments: []
     readonly property int notSubmittedCount: assignments.filter(function(assignment) {
         return assignment.status === "Not submitted"

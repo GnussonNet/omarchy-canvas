@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix="canvas-screenshots-") as directory:
     shutil.copy2(ROOT / "Settings.qml", stage / "Settings.qml")
     # Replace only the compositor-specific popup container. Page contents and
     # controls come from the plugin and installed Omarchy shell unchanged.
-    panel = (ROOT / "Panel.qml").read_text().replace('    moduleName: "canvas.assignments"\n    manageIpc: false\n', "")
+    panel = (ROOT / "Panel.qml").read_text().replace('    moduleName: "gnussonnet.omarchy-canvas"\n    manageIpc: false\n', "")
     panel = panel.replace('Ui.Panel {', '''Item {
     property var bar: null
     property string moduleName: ""

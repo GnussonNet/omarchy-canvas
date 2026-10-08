@@ -6,7 +6,7 @@ import qs.Ui as Ui
 
 Ui.Panel {
     id: root
-    moduleName: "canvas.assignments"
+    moduleName: "gnussonnet.omarchy-canvas"
     manageIpc: false
     property var anchorItem: null
     property var hostWidget: null
