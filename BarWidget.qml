@@ -96,20 +96,23 @@ Ui.BarWidget {
         bar: root.bar
         text: (root.needsSetup ? "Setup" : root.error ? "!" : root.notSubmittedCount) + (root.warnings.length ? " !" : "")
         labelVisible: false
-        fixedWidth: vertical ? -1 : content.implicitWidth + scaledHorizontalMargin * 2
+        // Use the same outer inset as a standard icon slot.
+        fixedWidth: vertical ? -1 : content.implicitWidth + Math.max(0, Style.bar.iconSlot - Style.bar.iconCanvas)
         fixedHeight: vertical ? content.implicitHeight + scaledVerticalPadding * 2 : -1
         tooltipText: "Not submitted assignments due in the next " + root.daysAhead + " days" + (root.busy ? " · Refreshing…" : "")
         onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton) root.toggle() }
-        Grid {
+        Item {
             id: content
             anchors.centerIn: parent
-            columns: button.vertical ? 1 : 2
-            columnSpacing: Style.space(4)
-            horizontalItemAlignment: Grid.AlignHCenter
-            verticalItemAlignment: Grid.AlignVCenter
+            implicitWidth: button.vertical ? Math.max(icon.width, count.implicitWidth) : icon.width + Style.space(4) + count.implicitWidth
+            implicitHeight: button.vertical ? icon.height + count.implicitHeight : icon.height
+            width: implicitWidth
+            height: implicitHeight
             // Match BarIconButton's canvas and font metrics so the icon shares
             // the built-in icons' baseline rather than the counter's line box.
             Ui.OpticalGlyph {
+                id: icon
+                x: button.vertical ? (content.width - width) / 2 : 0
                 width: Style.bar.iconCanvas
                 height: Style.bar.iconCanvas
                 text: "󰥔"
@@ -118,6 +121,10 @@ Ui.BarWidget {
                 color: button.foreground
             }
             Text {
+                id: count
+                x: button.vertical ? (content.width - width) / 2 : icon.width + Style.space(4)
+                // Align actual baselines, not the centers of different line boxes.
+                y: button.vertical ? icon.height : icon.baselineY - baselineOffset
                 text: button.text
                 textFormat: Text.PlainText
                 font.family: button.fontFamily
