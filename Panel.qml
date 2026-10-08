@@ -85,7 +85,7 @@ Ui.Panel {
                         width: parent.width - settingsButton.width - refreshButton.width
                         height: settingsButton.height
                         verticalAlignment: Text.AlignVCenter
-                        text: "󰑭  Assignments"
+                        text: "󰥔  Assignments"
                         color: root.barForeground
                         font.family: Style.font.family
                         font.pixelSize: Style.font.subtitle

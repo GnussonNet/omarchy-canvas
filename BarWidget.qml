@@ -93,7 +93,7 @@ Ui.BarWidget {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: "Assignments " + (root.needsSetup ? "Setup" : root.error ? "!" : root.notSubmittedCount) + (root.warnings.length ? " !" : "")
+        text: "󰥔 " + (root.needsSetup ? "Setup" : root.error ? "!" : root.notSubmittedCount) + (root.warnings.length ? " !" : "")
         tooltipText: "Not submitted assignments due in the next " + root.daysAhead + " days" + (root.busy ? " · Refreshing…" : "")
         onPressed: function(buttonCode) { if (buttonCode === Qt.LeftButton) root.toggle() }
     }
