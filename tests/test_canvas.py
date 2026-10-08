@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
-from canvas import CanvasError, Client, NoRedirect, collect, origin, submission_status, save_settings, settings_info, select_courses, read_assignments, validate_days
+from canvas import CanvasError, Client, NoRedirect, collect, origin, submission_status, save_settings, settings_info, select_courses, read_assignments, validate_days, input_data
 
 
 class ReaderTests(unittest.TestCase):
@@ -99,6 +99,79 @@ class ReaderTests(unittest.TestCase):
         for value in [0, -1, 91, True, 1.5, "7", None]:
             with self.subTest(value=value), self.assertRaises(CanvasError):
                 validate_days(value)
+
+    def test_blank_parameters_are_rejected_before_network(self):
+        client = Client("https://canvas.example", "secret")
+        client.opener = Mock()
+        for query in ["read_status=", "include[]=", "unexpected", "include[]=submission&read_status="]:
+            with self.subTest(query=query), self.assertRaises(CanvasError):
+                client.get(client.base + "/api/v1/courses?" + query)
+        client.opener.open.assert_not_called()
+
+    def test_malformed_response_is_a_canvas_error(self):
+        for body in ["not json", "{}", "[null]", "[1]", '["string"]']:
+            client = Client("https://canvas.example", "secret")
+            response = io.StringIO(body)
+            response.headers = {}
+            client.opener = Mock()
+            client.opener.open.return_value = response
+            with self.subTest(body=body), self.assertRaises(CanvasError):
+                client.get(client.base + "/api/v1/courses")
+
+    def test_pagination_cannot_change_route_or_loop(self):
+        for next_url in ["https://canvas.example/api/v1/courses/2/assignments", "https://canvas.example/api/v1/courses?"]:
+            client = Client("https://canvas.example", "secret")
+            client.get = Mock(return_value=([], next_url))
+            with self.subTest(url=next_url), self.assertRaises(CanvasError):
+                list(client.pages("/api/v1/courses", {}))
+            self.assertEqual(client.get.call_count, 1)
+
+    def test_complete_failure_is_not_a_successful_empty_refresh(self):
+        client = Mock(base="https://canvas.example")
+        client.pages.side_effect = CanvasError("Offline")
+        result = collect(client, [{"id": "1", "name": "Math"}])
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["warnings"], ["Math: Offline"])
+        self.assertNotIn("updated_at", result)
+
+    def test_incomplete_course_is_not_mixed_with_complete_courses(self):
+        def interrupted():
+            yield {"id": "1", "name": "Task", "due_at": "2026-10-09T12:00:00Z"}
+            raise CanvasError("Page two failed")
+        client = Mock(base="https://canvas.example")
+        client.pages.side_effect = [interrupted(), []]
+        result = collect(client, [{"id": "1", "name": "Math"}, {"id": "2", "name": "Art"}],
+                         datetime(2026, 10, 8, tzinfo=timezone.utc))
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["assignments"], [])
+        self.assertEqual(result["warnings"], ["Math: Page two failed"])
+
+    def test_malformed_assignments_isolate_course_failure(self):
+        task = {"id": "1", "name": "Task", "due_at": "2026-10-09T12:00:00Z"}
+        for fields in [{"due_at": "bad"}, {"due_at": 42}, {"due_at": "2026-10-09T12:00:00"},
+                       {"submission": "bad"}, {"submission_types": None}, {"name": None}, {"id": "١"}]:
+            client = Mock(base="https://canvas.example")
+            client.pages.side_effect = [[dict(task, **fields)], []]
+            with self.subTest(fields=fields):
+                result = collect(client, [{"id": "1", "name": "Math"}, {"id": "2", "name": "Art"}],
+                                 datetime(2026, 10, 8, tzinfo=timezone.utc))
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["assignments"], [])
+                self.assertEqual(len(result["warnings"]), 1)
+
+    def test_invalid_url_and_token_are_rejected_early(self):
+        for url in [None, 1, "https://canvas.example:bad", "https://canvas.example:65536", "https://canvas.example\n"]:
+            with self.subTest(url=url), self.assertRaises(CanvasError):
+                origin(url)
+        with self.assertRaises(CanvasError):
+            Client("https://canvas.example", "bad\ntoken")
+
+    def test_large_course_selection_input_and_size_limit(self):
+        data = {"selected_course_ids": [str(i) for i in range(5000)]}
+        with patch("canvas.sys.stdin", io.StringIO(json.dumps(data) + "\n")):
+            self.assertEqual(input_data(), data)
+        with patch("canvas.sys.stdin", io.StringIO("x" * 1048577)), self.assertRaises(CanvasError):
+            input_data()
 
 
 class SettingsTests(unittest.TestCase):
@@ -221,6 +294,33 @@ class SettingsTests(unittest.TestCase):
         original = self.path.read_text()
         with self.assertRaises(CanvasError):
             select_courses({"url": "https://canvas.example", "selected_course_ids": ["1"], "days_ahead": 100})
+        self.assertEqual(self.path.read_text(), original)
+
+    def test_malformed_configuration_returns_controlled_error(self):
+        self.connect_courses()
+        original = json.loads(self.path.read_text())
+        for config in [[], dict(original, courses=[None]), dict(original, courses=[{"id": "1", "name": None}]),
+                       dict(original, selected_course_ids=[{}]), dict(original, selection_saved="yes")]:
+            self.path.write_text(json.dumps(config))
+            with self.subTest(config=config), self.assertRaises(CanvasError):
+                settings_info()
+
+    def test_malformed_connection_input_preserves_settings(self):
+        self.connect_courses()
+        original = self.path.read_text()
+        self.get.reset_mock()
+        for data in [[], None, {"url": None}, {"url": "https://canvas.example", "token": 42}]:
+            with self.subTest(data=data), self.assertRaises(CanvasError):
+                save_settings(data)
+        self.get.assert_not_called()
+        self.assertEqual(self.path.read_text(), original)
+
+    def test_invalid_course_response_preserves_credentials(self):
+        self.connect_courses()
+        original = self.path.read_text()
+        self.get.return_value = ([{"id": "1", "name": None}], None)
+        with self.assertRaises(CanvasError):
+            save_settings({"url": "https://canvas.example", "token": "replacement"})
         self.assertEqual(self.path.read_text(), original)
 
 

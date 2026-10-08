@@ -5,6 +5,7 @@ import getpass
 import json
 import os
 from pathlib import Path
+from http.client import HTTPException
 import re
 import signal
 import sys
@@ -24,7 +25,13 @@ def config_path():
 
 
 def origin(value):
-    p = urlsplit(value)
+    if not isinstance(value, str) or any(c.isspace() or ord(c) < 32 for c in value):
+        raise CanvasError("Canvas URL must be an HTTPS site root.")
+    try:
+        p = urlsplit(value)
+        p.port  # Validate the port before making a request.
+    except ValueError:
+        raise CanvasError("Canvas URL must be an HTTPS site root.") from None
     if p.scheme != "https" or not p.hostname or p.username or p.password or p.query or p.fragment or p.path not in ("", "/"):
         raise CanvasError("Canvas URL must be an HTTPS site root, such as https://school.instructure.com.")
     return value.rstrip("/")
@@ -38,6 +45,7 @@ class NoRedirect(HTTPRedirectHandler):
 class Client:
     def __init__(self, base, token):
         self.base = origin(base)
+        validate_token(token)
         self.token = token
         self.opener = build_opener(NoRedirect())
 
@@ -47,7 +55,7 @@ class Client:
         if (p.scheme, p.netloc) != (base.scheme, base.netloc) or p.fragment or not re.fullmatch(r"/api/v1/courses(?:/[0-9]+/assignments)?", p.path):
             raise CanvasError("Refused an unexpected API URL.")
         # Do not allow API options that mark submissions as read.
-        query = parse_qs(p.query)
+        query = parse_qs(p.query, keep_blank_values=True)
         if set(query) - {"enrollment_type", "enrollment_state", "per_page", "page", "include[]", "override_assignment_dates"} or any(v != "submission" for v in query.get("include[]", [])):
             raise CanvasError("Refused unexpected API parameters.")
         request = Request(url, headers={"Authorization": "Bearer " + self.token,
@@ -59,9 +67,11 @@ class Client:
         except HTTPError as e:
             messages = {401: "Canvas token was rejected or expired.", 403: "Canvas denied access. Check token permissions.", 429: "Canvas rate limit reached. Try again later."}
             raise CanvasError(messages.get(e.code, "Canvas request failed (HTTP %d)." % e.code)) from None
-        except (URLError, TimeoutError):
+        except (URLError, TimeoutError, OSError, HTTPException):
             raise CanvasError("Unable to reach Canvas. Check your connection and site URL.") from None
-        if not isinstance(data, list):
+        except (ValueError, UnicodeError):
+            raise CanvasError("Canvas returned an unexpected response.") from None
+        if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
             raise CanvasError("Canvas returned an unexpected response.")
         next_url = None
         for part in link.split(","):
@@ -76,6 +86,8 @@ class Client:
         while url:
             if url in seen or len(seen) >= 1000:
                 raise CanvasError("Canvas pagination did not finish.")
+            if urlsplit(url).path != path:
+                raise CanvasError("Refused pagination to a different API route.")
             seen.add(url)
             rows, url = self.get(url)
             yield from rows
@@ -104,34 +116,61 @@ def validate_days(value):
     return value
 
 
+def record_id(record, kind):
+    value = record.get("id")
+    if type(value) not in (str, int) or not re.fullmatch(r"[0-9]+", str(value)):
+        raise CanvasError("Canvas returned an invalid " + kind + " ID.")
+    return str(value)
+
+
+def record_name(record, fallback):
+    name = record.get("name", fallback)
+    if not isinstance(name, str):
+        raise CanvasError("Canvas returned an invalid name.")
+    return name
+
+
 def collect(client, courses, now=None, days_ahead=7):
     now = now or datetime.now(timezone.utc)
     end = now + timedelta(days=validate_days(days_ahead))
     rows, warnings = [], []
+    successful_courses = 0
     for course in courses:
-        cid = str(course["id"])
-        if not cid.isdecimal():
-            raise CanvasError("Canvas returned an invalid course ID.")
-        name = course.get("name", "Course " + cid)
+        cid = record_id(course, "course")
+        name = record_name(course, "Course " + cid)
         try:
+            course_rows = []
             assignments = client.pages("/api/v1/courses/" + cid + "/assignments", {"include[]": "submission", "override_assignment_dates": "true", "per_page": 100})
             for assignment in assignments:
                 due = assignment.get("due_at")
                 if not due:
                     continue
-                date = datetime.fromisoformat(due.replace("Z", "+00:00"))
+                try:
+                    date = datetime.fromisoformat(due.replace("Z", "+00:00"))
+                    if date.tzinfo is None:
+                        raise ValueError
+                except (AttributeError, ValueError):
+                    raise CanvasError("Canvas returned an invalid assignment deadline.") from None
                 if not now <= date <= end or assignment.get("published") is False:
                     continue
-                if (assignment.get("submission") or {}).get("assignment_visible") is False:
+                sub = assignment.get("submission")
+                if sub is not None and not isinstance(sub, dict):
+                    raise CanvasError("Canvas returned invalid submission data.")
+                types = assignment.get("submission_types", [])
+                if not isinstance(types, list) or any(not isinstance(t, str) for t in types):
+                    raise CanvasError("Canvas returned invalid submission types.")
+                if (sub or {}).get("assignment_visible") is False:
                     continue
-                aid = str(assignment["id"])
-                if not aid.isdecimal():
-                    raise CanvasError("Canvas returned an invalid assignment ID.")
-                rows.append({"id": cid + ":" + aid, "name": assignment["name"], "course": name,
+                aid = record_id(assignment, "assignment")
+                course_rows.append({"id": cid + ":" + aid, "name": record_name(assignment, "Assignment " + aid), "course": name,
                     "due_at": date.astimezone(timezone.utc).isoformat(), "status": submission_status(assignment),
                     "url": client.base + "/courses/" + cid + "/assignments/" + aid})
+            rows.extend(course_rows)
+            successful_courses += 1
         except CanvasError as e:
             warnings.append(name + ": " + str(e))
+    if courses and not successful_courses:
+        return {"ok": False, "error": "No selected courses could be refreshed.", "warnings": warnings}
     rows.sort(key=lambda row: (row["due_at"], row["course"], row["name"]))
     return {"ok": True, "assignments": rows, "warnings": warnings, "updated_at": now.isoformat(), "days_ahead": days_ahead}
 
@@ -140,8 +179,7 @@ def configure():
     path = config_path()
     base = origin(input("Canvas site URL: ").strip())
     token = getpass.getpass("Canvas API token (hidden): ").strip()
-    if not token or "\n" in token or "\r" in token:
-        raise CanvasError("A valid token is required.")
+    validate_token(token)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     # O_EXCL avoids silently replacing existing credentials or following symlinks.
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -156,8 +194,25 @@ def read_config():
     if path.stat().st_mode & 0o077:
         raise CanvasError("Credential file must be private. Run chmod 600 on " + str(path))
     config = json.loads(path.read_text())
+    if not isinstance(config, dict):
+        raise CanvasError("Canvas configuration must be a JSON object.")
     config["url"] = origin(config["url"])
     validate_token(config["token"])
+    validate_days(config.get("days_ahead", 7))
+    courses = config.get("courses", [])
+    selected = config.get("selected_course_ids", [])
+    if not isinstance(courses, list) or any(not isinstance(c, dict) for c in courses):
+        raise CanvasError("Invalid saved courses. Reconnect in Settings.")
+    allowed = set()
+    for course in courses:
+        if not isinstance(course.get("id"), str):
+            raise CanvasError("Invalid saved course ID. Reconnect in Settings.")
+        allowed.add(record_id(course, "course"))
+        record_name(course, "Course")
+    if not isinstance(selected, list) or any(not isinstance(cid, str) or cid not in allowed for cid in selected):
+        raise CanvasError("Invalid saved selection. Reconnect in Settings.")
+    if type(config.get("selection_saved", False)) is not bool:
+        raise CanvasError("Invalid saved selection. Reconnect in Settings.")
     return config
 
 
@@ -185,6 +240,8 @@ def public_settings(config):
 
 
 def save_settings(data):
+    if not isinstance(data, dict) or not isinstance(data.get("url"), str) or not isinstance(data.get("token", ""), str):
+        raise CanvasError("Enter a Canvas site URL and access token.")
     base = origin(data["url"].strip())
     token = data.get("token", "").strip()
     try:
@@ -203,10 +260,8 @@ def save_settings(data):
     client = Client(base, token)
     courses = []
     for course in client.pages("/api/v1/courses", {"enrollment_type": "student", "enrollment_state": "active", "per_page": 100}):
-        cid = str(course["id"])
-        if not cid.isdecimal():
-            raise CanvasError("Canvas returned an invalid course ID.")
-        courses.append({"id": cid, "name": course.get("name", "Course " + cid)})
+        cid = record_id(course, "course")
+        courses.append({"id": cid, "name": record_name(course, "Course " + cid)})
     courses.sort(key=lambda course: course["name"].casefold())
     same_account = existing and existing["url"] == base and existing["token"] == token
     selected = existing.get("selected_course_ids", []) if same_account else []
@@ -218,6 +273,8 @@ def save_settings(data):
 
 
 def select_courses(data):
+    if not isinstance(data, dict):
+        raise CanvasError("Choose courses from the connected account.")
     config = read_config()
     if data.get("url") != config["url"]:
         raise CanvasError("Connection changed. Reopen Settings and try again.")
@@ -268,6 +325,13 @@ def refresh_timeout(*_):
     raise RefreshTimeout("Canvas request timed out. Try fewer courses or check your connection.")
 
 
+def input_data():
+    line = sys.stdin.readline(1048577)
+    if len(line) > 1048576:
+        raise CanvasError("Settings input is too large.")
+    return json.loads(line)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
@@ -285,9 +349,9 @@ def main():
         if args.settings_info:
             result = settings_info()
         elif args.save_settings:
-            result = save_settings(json.loads(sys.stdin.readline(16384)))
+            result = save_settings(input_data())
         elif args.select_courses:
-            result = select_courses(json.loads(sys.stdin.readline(16384)))
+            result = select_courses(input_data())
         else:
             result = read_assignments()
         print(json.dumps(result))

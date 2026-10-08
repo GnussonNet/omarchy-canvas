@@ -73,6 +73,7 @@ Ui.BarWidget {
                     } else {
                         root.needsSetup = result.needs_setup === true
                         root.error = result.error
+                        root.warnings = result.warnings || []
                     }
                 } catch (e) { root.error = "Canvas reader failed. Check Python 3 is installed." }
             }

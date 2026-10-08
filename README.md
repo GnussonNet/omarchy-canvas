@@ -99,7 +99,9 @@ This briefly restarts the bar and shell UI; it does not remove Canvas credential
   Graded alone does not prove an online submission was made.
 - A `!` indicates an error or an incomplete result. Previous results remain on
   connection failure, with the last successful refresh time visible. They may
-  be stale. Partial course failures are displayed explicitly.
+  be stale. If every selected course fails, previous results and their timestamp
+  remain visible. Partial course failures are displayed explicitly; assignments
+  from a failed or incompletely paginated course are omitted from that refresh.
 - Click an assignment to open it; Escape or clicking outside closes the panel.
 - External-tool submission status depends on what that tool reports to Canvas.
 

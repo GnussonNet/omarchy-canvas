@@ -27,6 +27,7 @@ Item {
     signal saved()
     signal connectedAccount()
     signal cancelled()
+    signal closeRequested()
     focus: true
 
     function clearSecret() { tokenField.clear() }
@@ -61,11 +62,12 @@ Item {
         saver.payload = JSON.stringify({url: savedUrl, selected_course_ids: selectedIds, days_ahead: daysField.field.value})
         saver.running = true
     }
+    Keys.priority: Keys.AfterItem
     Keys.onEscapePressed: function(event) {
         event.accepted = true
         if (saver.running) return
         clearSecret()
-        root.cancelled()
+        root.closeRequested()
     }
     Component.onCompleted: metadata.running = true
     Process {

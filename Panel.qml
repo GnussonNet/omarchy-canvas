@@ -33,11 +33,15 @@ Ui.Panel {
         editingSettings = true
         if (hostWidget) hostWidget.cancelRefresh()
     }
+    onShowSettingsChanged: Qt.callLater(function() {
+        var target = root.showSettings ? settingsLoader.item : keyCatcher
+        if (root.opened && target) target.forceActiveFocus()
+    })
     onOpenedChanged: {
         root.now = new Date()
-        if (!opened && settingsLoader.item) {
-            settingsLoader.item.clearSecret()
-            if (!settingsLoader.item.saving) editingSettings = false
+        if (!opened) {
+            if (settingsLoader.item) settingsLoader.item.clearSecret()
+            if (!settingsLoader.item || !settingsLoader.item.saving) editingSettings = false
         }
     }
     function switchPanel(direction) {
@@ -208,9 +212,14 @@ Ui.Panel {
                 active: root.showSettings
                 visible: active
                 sourceComponent: Settings {
+                    id: settingsPage
                     foreground: root.barForeground
                     onboarding: root.hostWidget ? root.hostWidget.needsSetup : false
                     readerBusy: root.hostWidget ? root.hostWidget.busy : false
+                    onCloseRequested: root.close()
+                    onSavingChanged: Qt.callLater(function() {
+                        if (!root.opened && !settingsPage.saving) root.editingSettings = false
+                    })
                     onConnectedAccount: {
                         if (!root.hostWidget) return
                         root.hostWidget.needsSetup = true

@@ -1,21 +1,34 @@
 # Validation
 
-Validated on the development machine, 2026-09-26:
+Validated on the development machine, 2026-10-08:
 
-- `python3 -m unittest discover -s tests -v`: 24 tests passed, including private
-  credential storage, token retention, failed connection checks, selected-course
-  requests, empty selections, migration without network requests, configurable
-  date boundaries, and persistence/validation of the look-ahead period.
+- `python3 -m unittest discover -s tests -v`: 35 tests passed. Coverage includes
+  private credential storage and atomic replacement, failed connection checks,
+  selected-course fetching, date windows, total and partial refresh failures,
+  interrupted pagination, malformed API responses and configuration, blank
+  disallowed parameters, route changes and pagination loops, and large selections.
+  Tests use synthetic responses and never contact Canvas.
 - `omarchy plugin validate .`: passed.
-- Qt 6 `qmllint`: imports resolved using a temporary import root with `qs`
-  pointing to `/usr/share/omarchy/shell`. No syntax or unresolved-import errors.
-  Remaining warnings concern runtime QObject properties and Quickshell's
-  `QProcess::ExitStatus` type metadata.
+- Qt 6 `qmllint` on every QML file: exited successfully using a temporary import
+  root with `qs` pointing to `/usr/share/omarchy/shell`. No syntax or unresolved
+  import errors. Remaining warnings concern dynamic QObject properties and
+  Quickshell's `QProcess::ExitStatus` type metadata.
+- Isolated Quickshell smoke test on the Wayland session: the bar widget and its
+  panel loaded, missing configuration produced the expected setup message, and
+  Settings instantiated successfully. The test used an empty temporary config,
+  kept the panel closed, and exited after three seconds. Scanner warnings concern
+  the temporary import layout; no QML component creation errors occurred.
+- `git diff --check`: passed.
 
-- Live desktop check: after restarting the shell, the installed assignments
-  panel displays both the settings gear and the setup button. Reinstalling alone
-  had left the previous UI loaded in the running shell.
+## Remaining release checks
 
-Not yet verified: live Canvas responses, onboarding/settings interactions,
-browser launch, and install/remove lifecycle. These need local installation and
-Canvas credentials. No real Canvas API request was made during development.
+Live Canvas responses and the complete interactive flow remain unverified:
+connecting with a valid/expired token, choosing and saving courses, keyboard
+input and focus, scrolling on a small display, browser links, outside-click and
+Escape dismissal, closing during connection/save, multi-monitor behavior, and
+plugin install/update/disable/remove lifecycle. These require a configured
+Canvas account and an interactive desktop check. Component loading and mocked
+API tests do not establish these results.
+
+No real Canvas API request was made during this review, and the installed plugin
+and desktop configuration were not changed.
